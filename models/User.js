@@ -1,0 +1,34 @@
+import mongoose from "mongoose";
+
+const userSchema = new mongoose.Schema(
+  {
+    name: String,
+    email: { type: String, unique: true, required: true },
+    password: { type: String, required: true },
+    phone: String,
+    altPhone: String,
+    address: String,
+    dob: String,
+    education: String,
+    university: String,
+    profession: String,
+    employmentStatus: String,
+    experience: String,
+
+    role: {
+      type: String,
+      enum: ["admin", "instructor", "student"],
+      required: true,
+    },
+
+    enrolledCourses: [
+      { course: {type: mongoose.Schema.Types.ObjectId, ref: "Course" },
+        enrolledAt: { type: Date, default: Date.now } ,
+        batch: {type: mongoose.Schema.Types.ObjectId, ref: "Batch"}
+      }
+    ],
+  },
+  { timestamps: true }
+);
+
+export default mongoose.model("User", userSchema);
