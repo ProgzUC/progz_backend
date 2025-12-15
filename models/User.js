@@ -17,9 +17,11 @@ const userSchema = new mongoose.Schema(
 
     role: {
       type: String,
-      enum: ["admin", "instructor", "student"],
+      enum: ["admin", "trainer", "student"],
       required: true,
     },
+    resetPasswordToken: String,
+  resetPasswordExpires: Date,
 
     enrolledCourses: [
       { course: {type: mongoose.Schema.Types.ObjectId, ref: "Course" },

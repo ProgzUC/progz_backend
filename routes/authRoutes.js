@@ -1,5 +1,5 @@
 import express from "express";
-import { register, login } from "../controllers/authController.js";
+import { register, login, forgotPassword, resetPassword } from "../controllers/authController.js";
 import { protect, authorizeRoles } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
@@ -7,6 +7,8 @@ const router = express.Router();
 // PUBLIC ROUTES
 router.post("/register", register);
 router.post("/login", login);
+router.post("/forgot-password", forgotPassword);
+router.post("/reset-password/:token", resetPassword);
 
 // PROTECTED ADMIN ONLY
 router.get("/admin-dashboard", protect, authorizeRoles("admin"), (req, res) => {
@@ -14,7 +16,7 @@ router.get("/admin-dashboard", protect, authorizeRoles("admin"), (req, res) => {
 });
 
 // TRAINER
-router.get("/trainer-dashboard", protect, authorizeRoles("instructor"), (req, res) => {
+router.get("/trainer-dashboard", protect, authorizeRoles("trainer"), (req, res) => {
   res.send("Trainer dashboard");
 });
 

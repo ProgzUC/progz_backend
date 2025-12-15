@@ -1,5 +1,6 @@
 import User from "../models/User.js";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { generateAccessToken, generateRefreshToken } from "../utils/generateTokens.js";
 
 export const register = async (req, res) => {
@@ -58,3 +59,58 @@ export const login = async (req, res) => {
   }
 };
 
+
+
+export const forgotPassword = async (req, res) => {
+  const { email } = req.body;
+
+  const user = await User.findOne({ email });
+  if (!user || user.role === "admin") {
+    // security: don't reveal if email exists
+    return res.json({ msg: "If user exists, reset link sent" });
+  }
+
+  const resetToken = crypto.randomBytes(32).toString("hex");
+  const hashedToken = crypto
+    .createHash("sha256")
+    .update(resetToken)
+    .digest("hex");
+
+  user.resetPasswordToken = hashedToken;
+  user.resetPasswordExpires = Date.now() + 15 * 60 * 1000; // 15 mins
+  await user.save();
+
+  const resetLink = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+
+  // TODO: send email
+  console.log("Reset Link:", resetLink);
+
+  res.json({ msg: "Password reset link sent" });
+};
+
+
+export const resetPassword = async (req, res) => {
+  const { token } = req.params;
+  const { password } = req.body;
+
+  const hashedToken = crypto
+    .createHash("sha256")
+    .update(token)
+    .digest("hex");
+
+  const user = await User.findOne({
+    resetPasswordToken: hashedToken,
+    resetPasswordExpires: { $gt: Date.now() },
+  });
+
+  if (!user)
+    return res.status(400).json({ msg: "Invalid or expired token" });
+
+  user.password = await bcrypt.hash(password, 10);
+  user.resetPasswordToken = undefined;
+  user.resetPasswordExpires = undefined;
+
+  await user.save();
+
+  res.json({ msg: "Password reset successful" });
+};
