@@ -21,10 +21,11 @@ const userSchema = new mongoose.Schema(
       required: true,
     },
     resetPasswordToken: String,
-  resetPasswordExpires: Date,
+    resetPasswordExpires: Date,
 
     enrolledCourses: [
-      { course: {type: mongoose.Schema.Types.ObjectId, ref: "Course" },
+      { 
+        course: {type: mongoose.Schema.Types.ObjectId, ref: "Course" },
         enrolledAt: { type: Date, default: Date.now } ,
         batch: {type: mongoose.Schema.Types.ObjectId, ref: "Batch"}
       }
