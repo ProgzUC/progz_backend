@@ -7,6 +7,9 @@ export const trainerBootstrap = async (req, res) => {
   try {
     const trainerId = req.user.id;
 
+    const trainer = await User.findById(trainerId)
+      .select("name email")
+      .lean();
     const batches = await Batch.find({
       trainers: { $elemMatch: { trainer: trainerId } }
     })
@@ -94,8 +97,8 @@ upcomingClasses = upcomingClasses.slice(0, 3);
     res.json({
       trainer: {
         id: req.user.id,
-        name: req.user.name,
-        email: req.user.email
+        name: trainer.name,
+        email: trainer.email
       },
       stats: {
         totalStudents,
