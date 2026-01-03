@@ -1,0 +1,12 @@
+{
+    "msg": "Login successful",
+    "role": "trainer",
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY2YTFhYTExMTExMTExMTExMTExMTExMSIsInJvbGUiOiJ0cmFpbmVyIiwiaWF0IjoxNzY3MzM2NjQ0LCJleHAiOjE3Njc0MjMwNDR9.henWFc_qRNb7jhygHFAUAEEGm3-qeX9XftXiRIU-aoY",
+    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY2YTFhYTExMTExMTExMTExMTExMTExMSIsImlhdCI6MTc2NzMzNjY0NCwiZXhwIjoxNzY3OTQxNDQ0fQ.g7imVOj0iBuXAZL1nBA6zGcnu_vWABH_qx3Y349nqhs",
+    "user": {
+        "id": "66a1aa111111111111111111",
+        "name": "Sarah Johnson",
+        "email": "sarah.trainer@urbancode.in",
+        "role": "trainer"
+    }
+}

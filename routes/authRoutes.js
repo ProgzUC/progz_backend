@@ -10,19 +10,19 @@ router.post("/login", login);
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password/:token", resetPassword);
 
-// PROTECTED ADMIN ONLY
-router.get("/admin-dashboard", protect, authorizeRoles("admin"), (req, res) => {
-  res.send("Admin dashboard");
-});
+// // PROTECTED ADMIN ONLY
+// router.get("/admin-dashboard", protect, authorizeRoles("admin"), (req, res) => {
+//   res.send("Admin dashboard");
+// });
 
-// TRAINER
-router.get("/trainer-dashboard", protect, authorizeRoles("trainer"), (req, res) => {
-  res.send("Trainer dashboard");
-});
+// // TRAINER
+// router.get("/trainer-dashboard", protect, authorizeRoles("trainer"), (req, res) => {
+//   res.send("Trainer dashboard");
+// });
 
-// STUDENT
-router.get("/student-dashboard", protect, authorizeRoles("student"), (req, res) => {
-  res.send("Student dashboard");
-});
+// // STUDENT
+// router.get("/student-dashboard", protect, authorizeRoles("student"), (req, res) => {
+//   res.send("Student dashboard");
+// });
 
 export default router;

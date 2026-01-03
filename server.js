@@ -6,6 +6,7 @@ import authRoutes from "./routes/authRoutes.js";
 import createOrUpdateAdmin from "./utils/createOrUpdateAdmin.js";
 import bcrypt from "bcryptjs";
 import User from "./models/User.js";
+import trainerRoutes from "./routes/trainerRoutes.js";
 dotenv.config();
 
 connectDB();
@@ -17,6 +18,7 @@ app.use(express.json());
 
 // createOrUpdateAdmin();
 app.use("/api/auth", authRoutes);
+app.use("/api/trainer",trainerRoutes)
 
 // const createDemoUsers = async () => {
 //   try {
