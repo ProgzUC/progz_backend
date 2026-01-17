@@ -7,10 +7,16 @@ import createOrUpdateAdmin from "./utils/createOrUpdateAdmin.js";
 import bcrypt from "bcryptjs";
 import User from "./models/User.js";
 import trainerRoutes from "./routes/trainerRoutes.js";
+import courseRoutes from "./routes/courseRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
+import binRoutes from "./routes/binRoutes.js";
+import syncRoutes from "./routes/syncRoutes.js";
+import batchRoutes from "./routes/batchRoutes.js";
+import { initCronJobs } from "./jobs/cronJobs.js";
 dotenv.config();
 
 connectDB();
-console.log("Environment:", process.env.MONGO_URI );
+console.log("Environment:", process.env.MONGO_URI);
 
 const app = express();
 app.use(cors());
@@ -18,7 +24,14 @@ app.use(express.json());
 
 // createOrUpdateAdmin();
 app.use("/api/auth", authRoutes);
-app.use("/api/trainer",trainerRoutes)
+app.use("/api/trainer", trainerRoutes)
+app.use("/api/courses", courseRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/bin", binRoutes);
+app.use("/api/sync", syncRoutes);
+app.use("/api/batches", batchRoutes);
+
+initCronJobs();
 
 // const createDemoUsers = async () => {
 //   try {

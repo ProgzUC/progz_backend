@@ -15,6 +15,10 @@ const userSchema = new mongoose.Schema(
     employmentStatus: String,
     experience: String,
 
+    source: { type: String, default: "web" },
+    zenCourseName: String,
+    zenCourseType: String,
+
     role: {
       type: String,
       enum: ["admin", "trainer", "student"],
@@ -24,10 +28,10 @@ const userSchema = new mongoose.Schema(
     resetPasswordExpires: Date,
 
     enrolledCourses: [
-      { 
-        course: {type: mongoose.Schema.Types.ObjectId, ref: "Course" },
-        enrolledAt: { type: Date, default: Date.now } ,
-        batch: {type: mongoose.Schema.Types.ObjectId, ref: "Batch"}
+      {
+        course: { type: mongoose.Schema.Types.ObjectId, ref: "Course" },
+        enrolledAt: { type: Date, default: Date.now },
+        batch: { type: mongoose.Schema.Types.ObjectId, ref: "Batch" }
       }
     ],
   },
