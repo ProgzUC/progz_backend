@@ -7,7 +7,7 @@ import RecycleBin from "../models/RecycleBin.js";
 // @access  Private (Trainer/Admin)
 export const createCourse = async (req, res) => {
   try {
-    const { courseName, courseId, courseDescription, courseDuration, modules } = req.body;
+    const { courseName, courseId, courseDescription, courseDuration, modules, thumbnail } = req.body;
 
     // Check if courseId already exists
     const courseExists = await Course.findOne({ courseId });
@@ -27,6 +27,7 @@ export const createCourse = async (req, res) => {
       courseDescription,
       courseDuration,
       modules,
+      thumbnail
     });
 
     res.status(201).json(course);

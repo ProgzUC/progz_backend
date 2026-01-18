@@ -4,9 +4,19 @@ import mongoose from "mongoose";
 const sectionSchema = new mongoose.Schema({
   sectionName: { type: String, required: true, trim: true },
   learningMaterialNotes: String,
-  learningMaterialUrls: [String],
+  learningMaterialFile: {
+    url: String,
+    publicId: String,
+    fileType: String,
+    originalName: String
+  },
   codeChallengeInstructions: String,
-  codeChallengeUrls: [String],
+  codeChallengeFile: {
+    url: String,
+    publicId: String,
+    fileType: String,
+    originalName: String
+  },
   videoReferences: [String],
 });
 
@@ -35,6 +45,10 @@ const courseSchema = new mongoose.Schema(
   {
     courseName: { type: String, required: true, trim: true },
     courseId: { type: String, unique: true, required: true },
+    thumbnail: {
+      url: String,
+      publicId: String
+    },
     instructor: [
       {
         type: mongoose.Schema.Types.ObjectId,
