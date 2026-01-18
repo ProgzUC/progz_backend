@@ -97,6 +97,17 @@ export const approveUser = async (req, res) => {
     }
 };
 
+//Admin: Get all active users
+export const getAllUsers = async (req, res) => {
+    try {
+        // Fetch all users excluding passwords and excluding admin users if needed
+        const users = await User.find({ role: { $ne: "admin" } }).sort({ createdAt: -1 }).select("-password");
+        res.status(200).json(users);
+    } catch (error) {
+        res.status(500).json({ msg: error.message });
+    }
+};
+
 // Admin: Get all pending users
 export const getAllPendingUsers = async (req, res) => {
     try {
