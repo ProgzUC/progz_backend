@@ -4,19 +4,19 @@ import mongoose from "mongoose";
 const sectionSchema = new mongoose.Schema({
   sectionName: { type: String, required: true, trim: true },
   learningMaterialNotes: String,
-  learningMaterialFile: {
+  learningMaterialFile: [{
     url: String,
     publicId: String,
     fileType: String,
     originalName: String
-  },
+  }],
   codeChallengeInstructions: String,
-  codeChallengeFile: {
+  codeChallengeFile: [{
     url: String,
     publicId: String,
     fileType: String,
     originalName: String
-  },
+  }],
   videoReferences: [String],
 });
 
