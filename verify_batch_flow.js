@@ -7,7 +7,7 @@ import bcrypt from "bcryptjs";
 
 dotenv.config();
 
-const API_URL = "http://127.0.0.1:5001/api";
+const API_URL = "http://127.0.0.1:5002/api";
 
 const post = async (url, data, token) => {
     const headers = { "Content-Type": "application/json" };
@@ -38,9 +38,13 @@ const get = async (url, token) => {
 const setupData = async () => {
     // 1. Ensure Admin
     let admin = await User.findOne({ role: "admin" });
+    const adminPass = await bcrypt.hash("Admin@123", 10);
     if (!admin) {
-        const hashed = await bcrypt.hash("Admin@123", 10);
-        admin = await User.create({ name: "Admin", email: "admin_batch@progz.in", password: hashed, role: "admin", phone: "111" });
+        admin = await User.create({ name: "Admin", email: "admin_batch@progz.in", password: adminPass, role: "admin", phone: "111", isApproved: true });
+    } else {
+        admin.password = adminPass;
+        admin.isApproved = true; // Ensure approved just in case
+        await admin.save();
     }
 
     // 2. Ensure Course
@@ -81,7 +85,10 @@ const runVerification = async () => {
         const batchData = {
             name: "Jan 2024 Full Stack",
             course: course._id,
-            classTiming: "10 AM - 12 PM",
+            classTiming: {
+                startTime: "10:00 AM",
+                endTime: "12:00 PM"
+            },
             startDate: "2024-01-01",
             daysOfWeek: ["Monday", "Wednesday", "Friday"]
         };
