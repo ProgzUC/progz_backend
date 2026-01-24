@@ -7,13 +7,16 @@ import RecycleBin from "../models/RecycleBin.js";
 // @access  Private (Trainer/Admin)
 export const createCourse = async (req, res) => {
   try {
-    const { courseName, courseId, courseDescription, courseDuration, modules, thumbnail } = req.body;
+    const { courseName, courseDescription, courseDuration, modules, thumbnail } = req.body;
 
-    // Check if courseId already exists
-    const courseExists = await Course.findOne({ courseId });
-    if (courseExists) {
-      return res.status(400).json({ message: "Course ID already exists" });
-    }
+    // Generate courseId from courseName
+    // slugify: lowercase, replace non-alphanumeric with hyphen, trim hyphens
+    let baseId = courseName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    if (!baseId) baseId = 'course';
+
+    // Add unique suffix
+    const uniqueSuffix = Math.random().toString(36).substring(2, 8);
+    const courseId = `${baseId}-${uniqueSuffix}`;
 
     // Assign currect user as instructor if not provided (or push to array)
     // Assuming single instructor for now based on request context, but model supports array.
