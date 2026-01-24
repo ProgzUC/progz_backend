@@ -68,7 +68,7 @@ initCronJobs();
 //     if (!studentExists) {
 //       const studentPassword = await bcrypt.hash("Student@123", 10);
 
-//       await User.create({
+//       await User.create({ 
 //         name: "Demo Student",
 //         email: studentEmail,
 //         password: studentPassword,

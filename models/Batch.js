@@ -33,7 +33,13 @@ const batchSchema = new mongoose.Schema(
 
     students: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 
-    classTiming: { type: String, required: true },
+    classTiming: {
+      startTime: { type: String, required: true }, // "10:00"
+      endTime: { type: String, required: true },   // "12:00"
+      timezone: { type: String, default: "Asia/Kolkata" },
+    },
+
+    // classTiming: { type: String, required: true },
     meetLink: String,
 
     startDate: Date,
@@ -41,7 +47,7 @@ const batchSchema = new mongoose.Schema(
 
     daysOfWeek: {
       type: [String],
-      enum: ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],
+      enum: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
     },
 
     status: {
