@@ -1,35 +1,93 @@
 import Batch from "../models/Batch.js";
-import User from "../models/User.js";
 import Course from "../models/Course.js";
+import User from "../models/User.js";
 
-// @desc    Create a new batch
-// @route   POST /api/batches
-// @access  Private (Admin/Trainer)
 export const createBatch = async (req, res) => {
-    try {
-        const { name, course, classTiming, meetLink, startDate, endDate, daysOfWeek } = req.body;
+  try {
+    const {
+      name,
+      course,
+      trainers = [],
+      students = [],
+      classTiming,
+      meetLink,
+      startDate,
+      endDate,
+      daysOfWeek,
+      status,
+      sectionProgress = [],
+    } = req.body;
 
-        // Verify course exists
-        const courseExists = await Course.findById(course);
-        if (!courseExists) {
-            return res.status(404).json({ msg: "Course not found" });
+    // Required field validation
+    if (!name || !course || !classTiming?.startTime || !classTiming?.endTime) {
+      return res.status(400).json({
+        msg: "name, course, classTiming.startTime and classTiming.endTime are required",
+      });
+    }
+
+    // Verify course exists
+    const courseExists = await Course.findById(course);
+    if (!courseExists) {
+      return res.status(404).json({ msg: "Course not found" });
+    }
+
+    // Optional: validate trainers & students existence
+    if (trainers.length) {
+      for (const t of trainers) {
+        if (!t.trainer) {
+          return res.status(400).json({ msg: "Each trainer entry must have trainer id" });
         }
 
-        const batch = await Batch.create({
-            name,
-            course,
-            classTiming,
-            meetLink,
-            startDate,
-            endDate,
-            daysOfWeek,
-        });
-
-        res.status(201).json(batch);
-    } catch (error) {
-        res.status(500).json({ msg: "Server error", error: error.message });
+        const trainerExists = await User.findById(t.trainer);
+        if (!trainerExists) {
+          return res.status(404).json({ msg: `Trainer not found: ${t.trainer}` });
+        }
+      }
     }
+
+    if (students.length) {
+      const count = await User.countDocuments({ _id: { $in: students } });
+      if (count !== students.length) {
+        return res.status(400).json({ msg: "One or more students are invalid" });
+      }
+    }
+
+    const batch = await Batch.create({
+      name,
+      course,
+      trainers: trainers.map(t => ({
+        trainer: t.trainer,
+        assignedModules: t.assignedModules || [],
+        fromDate: t.fromDate,
+        toDate: t.toDate,
+        isCurrent: !!t.isCurrent,
+      })),
+      students,
+      classTiming: {
+        startTime: classTiming.startTime,
+        endTime: classTiming.endTime,
+        timezone: classTiming.timezone || "Asia/Kolkata",
+      },
+      meetLink,
+      startDate,
+      endDate,
+      daysOfWeek,
+      status, // schema will validate enum & default
+      sectionProgress,
+    });
+
+    res.status(201).json({
+      msg: "Batch created successfully",
+      batch,
+    });
+  } catch (error) {
+    res.status(500).json({
+      msg: "Server error",
+      error: error.message,
+    });
+  }
 };
+
 
 // @desc    Get all batches
 // @route   GET /api/batches

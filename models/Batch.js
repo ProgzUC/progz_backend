@@ -52,7 +52,7 @@ const batchSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["upcoming", "active", "completed"],
+      enum: ["upcoming", "active", "completed", "cancelled", "on-hold"],
       default: "upcoming",
       index: true,
     },
