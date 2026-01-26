@@ -1,6 +1,7 @@
 import Batch from "../models/Batch.js";
 import Course from "../models/Course.js";
 import User from "../models/User.js";
+import bcrypt from "bcryptjs";
 import { getNextClassDate } from "../utils/getNextClassDate.js";
 
 export const trainerBootstrap = async (req, res) => {
@@ -199,18 +200,58 @@ export const getTrainerprofile = async (req, res) => {
 };
 
 export const updateTrainerprofile = async (req, res) => {
-  const trainerId = req.user.id;
-  const updates = req.body;
+  try {
+    const trainerId = req.user.id;
+    const input = req.body || {};
 
-  const trainer = await User.findOneAndUpdate(
-    { _id: trainerId },
-    { $set: updates },
-    { new: true }
-  )
-    .select("-password")
-    .lean();
+    // Protected fields that should not be updatable by the trainer themself
+    const protectedFields = new Set([
+      "_id",
+      "email",
+      "role",
+      "resetPasswordToken",
+      "resetPasswordExpires",
+      "createdAt",
+      "updatedAt",
+      "__v",
+    ]);
 
-  res.json(trainer);
+    // Build allowed fields dynamically from schema to avoid drifting
+    const schemaKeys = Object.keys(User.schema.paths || {});
+    const allowedFields = schemaKeys.filter(k => !protectedFields.has(k));
+
+    const updates = {};
+    for (const key of allowedFields) {
+      if (Object.prototype.hasOwnProperty.call(input, key)) {
+        updates[key] = input[key];
+      }
+    }
+
+    // If password is being updated, hash it
+    if (updates.password) {
+      const salt = await bcrypt.genSalt(10);
+      updates.password = await bcrypt.hash(updates.password, salt);
+    }
+
+    // If nothing to update, return current profile
+    if (Object.keys(updates).length === 0) {
+      const current = await User.findById(trainerId).select("-password").lean();
+      return res.json(current);
+    }
+
+    const trainer = await User.findOneAndUpdate(
+      { _id: trainerId },
+      { $set: updates },
+      { new: true, runValidators: true, context: "query" }
+    )
+      .select("-password")
+      .lean();
+
+    res.json(trainer);
+  } catch (err) {
+    console.error("updateTrainerprofile error:", err);
+    res.status(500).json({ message: "Update failed" });
+  }
 };
 
 export const toggleSectionCompletion = async (req, res) => {
