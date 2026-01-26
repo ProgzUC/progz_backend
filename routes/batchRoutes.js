@@ -20,5 +20,6 @@ router.post("/:id/enroll", protect, authorizeRoles("admin", "trainer"), enrollSt
 router.post("/:id/remove-student", protect, authorizeRoles("admin", "trainer"), removeStudent);
 router.post("/:id/trainers", protect, authorizeRoles("admin", "trainer"), manageTrainers);
 router.post("/:id/sections/toggle", protect, authorizeRoles("admin", "trainer"), toggleSectionCompletion);
+router.delete("/:id", protect, authorizeRoles("admin", "trainer"), deleteBatch);
 
 export default router;

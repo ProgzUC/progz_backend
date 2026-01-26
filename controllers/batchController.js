@@ -284,3 +284,22 @@ export const toggleSectionCompletion = async (req, res) => {
         res.status(500).json({ msg: "Server error", error: error?.message });
     }
 };
+
+export const deleteBatch = async (req, res) => {
+  try {
+    const batchId = req.params.id;
+
+    const batch = await Batch.findById(batchId);
+    if (!batch) {
+      return res.status(404).json({ msg: "Batch not found" });
+    }
+
+    // Optionally, you can add checks here to prevent deletion if there are enrolled students, etc.
+
+    await Batch.findByIdAndDelete(batchId);
+
+    res.json({ msg: "Batch deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ msg: "Server error", error: error.message });
+  }
+}
