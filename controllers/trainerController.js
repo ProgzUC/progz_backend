@@ -257,8 +257,17 @@ export const updateTrainerprofile = async (req, res) => {
 
 export const toggleSectionCompletion = async (req, res) => {
   try {
-    const { batchId, moduleIndex, sectionIndex } = req.body;
+    let { batchId, moduleIndex, sectionIndex } = req.body;
     const trainerId = req.user.id;
+
+    // Basic validation / normalize types
+    if (!batchId) return res.status(400).json({ message: "batchId required" });
+    moduleIndex = moduleIndex !== undefined ? parseInt(moduleIndex, 10) : undefined;
+    sectionIndex = sectionIndex !== undefined ? parseInt(sectionIndex, 10) : undefined;
+
+    if (moduleIndex === undefined || Number.isNaN(moduleIndex) || sectionIndex === undefined || Number.isNaN(sectionIndex)) {
+      return res.status(400).json({ message: "moduleIndex and sectionIndex must be valid integers" });
+    }
 
     // 1️⃣ Find current state
     const batch = await Batch.findOne(
@@ -279,30 +288,32 @@ export const toggleSectionCompletion = async (req, res) => {
 
     const isCompleted = batch.sectionProgress[0].isCompleted;
 
-    // 2️⃣ Toggle
-    await Batch.updateOne(
+    // 2️⃣ Toggle (include trainer filter to avoid race/authorization window)
+    const result = await Batch.updateOne(
       {
         _id: batchId,
+        "trainers.trainer": trainerId,
         "sectionProgress.moduleIndex": moduleIndex,
         "sectionProgress.sectionIndex": sectionIndex,
       },
       {
         $set: {
           "sectionProgress.$.isCompleted": !isCompleted,
-          "sectionProgress.$.completedBy": !isCompleted
-            ? trainerId
-            : null,
-          "sectionProgress.$.completionTime": !isCompleted
-            ? new Date()
-            : null,
+          "sectionProgress.$.completedBy": !isCompleted ? trainerId : null,
+          "sectionProgress.$.completionTime": !isCompleted ? new Date() : null,
         },
       }
     );
 
-    res.json({
-      success: true,
-      isCompleted: !isCompleted,
-    });
+    // If nothing matched/updated, surface a 404 so caller knows the toggle didn't apply
+    // Mongoose returns an object with matchedCount/modifiedCount (depending on driver)
+    const matched = result.matchedCount ?? result.n ?? 0;
+    const modified = result.modifiedCount ?? result.nModified ?? 0;
+    if (matched === 0 || modified === 0) {
+      return res.status(404).json({ message: "Section not found or not authorized" });
+    }
+
+    res.json({ success: true, isCompleted: !isCompleted });
   } catch (err) {
     console.error("Toggle error:", err);
     res.status(500).json({ message: "Toggle failed" });
