@@ -282,13 +282,37 @@ export const toggleSectionCompletion = async (req, res) => {
       }
     ).lean();
 
+    // 2️⃣ Check if section exists in progress array
     if (!batch || !batch.sectionProgress?.length) {
-      return res.status(404).json({ message: "Section not found" });
+      // Section not in progress array yet - create new entry (mark as complete)
+      const result = await Batch.updateOne(
+        { 
+          _id: batchId, 
+          "trainers.trainer": trainerId 
+        },
+        {
+          $push: {
+            sectionProgress: {
+              moduleIndex,
+              sectionIndex,
+              isCompleted: true,
+              completedBy: trainerId,
+              completionTime: new Date()
+            }
+          }
+        }
+      );
+
+      if (result.matchedCount === 0) {
+        return res.status(404).json({ message: "Batch not found or not authorized" });
+      }
+
+      return res.json({ success: true, isCompleted: true });
     }
 
+    // 3️⃣ Section exists - toggle completion status
     const isCompleted = batch.sectionProgress[0].isCompleted;
 
-    // 2️⃣ Toggle (include trainer filter to avoid race/authorization window)
     const result = await Batch.updateOne(
       {
         _id: batchId,
@@ -305,8 +329,7 @@ export const toggleSectionCompletion = async (req, res) => {
       }
     );
 
-    // If nothing matched/updated, surface a 404 so caller knows the toggle didn't apply
-    // Mongoose returns an object with matchedCount/modifiedCount (depending on driver)
+    // If nothing matched/updated, surface a 404
     const matched = result.matchedCount ?? result.n ?? 0;
     const modified = result.modifiedCount ?? result.nModified ?? 0;
     if (matched === 0 || modified === 0) {
