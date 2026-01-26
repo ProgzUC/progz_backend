@@ -186,6 +186,7 @@ export const getTrainerCourses = async (req, res) => {
     courses.map(c => ({
       courseId: c._id,
       courseName: c.courseName,
+      thumbnail: c.thumbnail,
       totalStudents: c.enrolledStudents.length,
       totalSections: c.modules.reduce((acc, m) => acc + (m.sections?.length || 0), 0),
     }))
