@@ -10,9 +10,7 @@ export const trainerBootstrap = async (req, res) => {
     const trainer = await User.findById(trainerId)
       .select("name email")
       .lean();
-    const batches = await Batch.find({
-      trainers: { $elemMatch: { trainer: trainerId } }
-    })
+    const batches = await Batch.find({ "trainers.trainer": trainerId })
       .populate("course", "courseName courseDuration modules")
       .lean();
 
@@ -44,34 +42,46 @@ export const trainerBootstrap = async (req, res) => {
       : Math.round((completedSections / totalSections) * 100);
 
   if (batch.status === "active") {
+    // compose human-friendly timing string from classTiming object
+    const timingStr = batch.classTiming
+      ? `${batch.classTiming.startTime} - ${batch.classTiming.endTime} ${batch.classTiming.timezone || ""}`.trim()
+      : null;
+
+    // get trainer-specific assignment data (assignedModules, isCurrent)
+    const trainerAssign = batch.trainers?.find(t => String(t.trainer) === String(trainerId)) || null;
+
     activeBatches.push({
       batchId: batch._id,
       batchName: batch.name,
       courseName: course.courseName,
       duration: course.courseDuration,
       studentsCount: batch.students?.length || 0,
-      timing: batch.classTiming,
+      timing: timingStr,
       startDate: batch.startDate,
       meetLink: batch.meetLink,
-      completionPercentage
+      completionPercentage,
+      trainerAssignment: trainerAssign
+        ? {
+            assignedModules: trainerAssign.assignedModules || [],
+            isCurrent: !!trainerAssign.isCurrent,
+            fromDate: trainerAssign.fromDate || null,
+            toDate: trainerAssign.toDate || null,
+          }
+        : null,
     });
 
-   const nextClassDate = getNextClassDate(
-  batch.daysOfWeek,
-  batch.classTiming
-);
+    const nextClassDate = getNextClassDate(batch.daysOfWeek, batch.classTiming);
 
-if (nextClassDate) {
-  upcomingClasses.push({
-    batchId: batch._id,
-    batchName: batch.name,
-    courseName: course.courseName,
-    timing: batch.classTiming,
-    meetLink: batch.meetLink,
-    nextClassAt: nextClassDate
-  });
-}
-
+    if (nextClassDate) {
+      upcomingClasses.push({
+        batchId: batch._id,
+        batchName: batch.name,
+        courseName: course.courseName,
+        timing: timingStr,
+        meetLink: batch.meetLink,
+        nextClassAt: nextClassDate,
+      });
+    }
   }
 
   if (batch.status === "completed") {
@@ -132,15 +142,30 @@ export const getTrainerBatchDetails = async (req, res) => {
       return res.status(404).json({ message: "Batch not found" });
     }
 
+    const timingStr = batch.classTiming
+      ? `${batch.classTiming.startTime} - ${batch.classTiming.endTime} ${batch.classTiming.timezone || ""}`.trim()
+      : null;
+
+    const trainerAssign = batch.trainers?.find(t => String(t.trainer) === String(trainerId)) || null;
+
     res.json({
       batchId: batch._id,
       batchName: batch.name,
       courseName: batch.course.courseName,
       classTiming: batch.classTiming,
+      timing: timingStr,
       startDate: batch.startDate,
       students: batch.students,
       curriculum: batch.course.modules,
       sectionProgress: batch.sectionProgress,
+      trainerAssignment: trainerAssign
+        ? {
+            assignedModules: trainerAssign.assignedModules || [],
+            isCurrent: !!trainerAssign.isCurrent,
+            fromDate: trainerAssign.fromDate || null,
+            toDate: trainerAssign.toDate || null,
+          }
+        : null,
     });
   } catch (err) {
     res.status(500).json({ message: "Batch details error" });
@@ -161,10 +186,7 @@ export const getTrainerCourses = async (req, res) => {
       courseId: c._id,
       courseName: c.courseName,
       totalStudents: c.enrolledStudents.length,
-      totalSections: c.modules.reduce(
-        (acc, m) => acc + m.sections.length,
-        0
-      ),
+      totalSections: c.modules.reduce((acc, m) => acc + (m.sections?.length || 0), 0),
     }))
   );
 };
