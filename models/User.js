@@ -9,6 +9,7 @@ const userSchema = new mongoose.Schema(
     altPhone: String,
     address: String,
     dob: String,
+    gender: String,
     education: String,
     university: String,
     profession: String,
@@ -18,6 +19,7 @@ const userSchema = new mongoose.Schema(
     source: { type: String, default: "web" },
     zenCourseName: String,
     zenCourseType: String,
+    skills: String,
 
     role: {
       type: String,
