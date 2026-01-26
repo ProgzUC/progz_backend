@@ -7,6 +7,7 @@ import {
     removeStudent,
     manageTrainers,
     toggleSectionCompletion,
+    deleteBatch
 } from "../controllers/batchController.js";
 import { protect, authorizeRoles } from "../middlewares/authMiddleware.js";
 
