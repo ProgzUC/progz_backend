@@ -7,7 +7,8 @@ import {
     removeStudent,
     manageTrainers,
     toggleSectionCompletion,
-    deleteBatch
+    deleteBatch,
+    updateBatch
 } from "../controllers/batchController.js";
 import { protect, authorizeRoles } from "../middlewares/authMiddleware.js";
 
@@ -22,5 +23,6 @@ router.post("/:id/remove-student", protect, authorizeRoles("admin", "trainer"), 
 router.post("/:id/trainers", protect, authorizeRoles("admin", "trainer"), manageTrainers);
 router.post("/:id/sections/toggle", protect, authorizeRoles("admin", "trainer"), toggleSectionCompletion);
 router.delete("/:id", protect, authorizeRoles("admin", "trainer"), deleteBatch);
+router.put("/:id", protect, authorizeRoles("admin", "trainer"), updateBatch);
 
 export default router;

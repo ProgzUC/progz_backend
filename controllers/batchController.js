@@ -303,3 +303,45 @@ export const deleteBatch = async (req, res) => {
     res.status(500).json({ msg: "Server error", error: error.message });
   }
 }
+
+export const updateBatch = async (req, res) => {
+  try {
+    const batchId = req.params.id;
+    const updates = req.body;
+
+    const batch = await Batch.findById(batchId);
+    if (!batch) {
+      return res.status(404).json({ msg: "Batch not found" });
+    }
+
+    // Apply updates
+    const allowedFields = [
+      "name",
+      "course",
+      "trainers",
+      "students",
+      "classTiming",
+      "meetLink",
+      "startDate",
+      "endDate",
+      "daysOfWeek",
+      "status",
+      "sectionProgress",
+    ];
+
+    allowedFields.forEach((field) => {
+      if (updates[field] !== undefined) {
+        batch[field] = updates[field];
+      }
+    });
+
+    await batch.save();
+
+    res.json({
+      msg: "Batch updated successfully",
+      batch,
+    });
+  } catch (error) {
+    res.status(500).json({ msg: "Server error", error: error.message });
+  }
+};
