@@ -1,17 +1,17 @@
-const User = require("../models/User");
-const Enrollment = require("../models/Enrollment"); // Adjust path as needed
-const bcrypt = require("bcryptjs");
+import User from "../models/User.js";
+import Course from "../models/Course.js";
+import bcrypt from "bcryptjs";
 
 /**
  * @desc    Get student profile
  * @route   GET /api/student/profile
  * @access  Private (Student)
  */
-exports.getStudentProfile = async (req, res) => {
+export async function getStudentProfile(req, res) {
     try {
         const studentId = req.user.id;
         
-        const user = await User.findById(studentId).select("-password");
+    const user = await User.findById(studentId).select("-password").lean();
         
         if (!user) {
             return res.status(404).json({ message: "User not found" });
@@ -30,14 +30,14 @@ exports.getStudentProfile = async (req, res) => {
         console.error("Get profile error:", error);
         res.status(500).json({ message: "Failed to fetch profile" });
     }
-};
+}
 
 /**
  * @desc    Update student profile
  * @route   PUT /api/student/profile
  * @access  Private (Student)
  */
-exports.updateStudentProfile = async (req, res) => {
+export async function updateStudentProfile(req, res) {
     try {
         const studentId = req.user.id;
         const { phone, location, education, jobTitle } = req.body;
@@ -46,7 +46,7 @@ exports.updateStudentProfile = async (req, res) => {
             studentId,
             { phone, location, education, jobTitle },
             { new: true, runValidators: true }
-        ).select("-password");
+        ).select("-password").lean();
 
         if (!user) {
             return res.status(404).json({ message: "User not found" });
@@ -65,14 +65,14 @@ exports.updateStudentProfile = async (req, res) => {
         console.error("Update profile error:", error);
         res.status(500).json({ message: "Failed to update profile" });
     }
-};
+}
 
 /**
  * @desc    Change student password
  * @route   POST /api/student/change-password
  * @access  Private (Student)
  */
-exports.changePassword = async (req, res) => {
+export async function changePassword(req, res) {
     try {
         const studentId = req.user.id;
         const { currentPassword, newPassword } = req.body;
@@ -81,20 +81,20 @@ exports.changePassword = async (req, res) => {
             return res.status(400).json({ message: "All fields are required" });
         }
 
-        const user = await User.findById(studentId);
+    const user = await User.findById(studentId);
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
 
         // Verify current password
-        const isMatch = await bcrypt.compare(currentPassword, user.password);
+        const isMatch = await compare(currentPassword, user.password);
         if (!isMatch) {
             return res.status(401).json({ message: "Current password is incorrect" });
         }
 
         // Hash and update new password
-        const salt = await bcrypt.genSalt(10);
-        user.password = await bcrypt.hash(newPassword, salt);
+        const salt = await genSalt(10);
+        user.password = await hash(newPassword, salt);
         await user.save();
 
         res.json({ message: "Password changed successfully" });
@@ -102,99 +102,64 @@ exports.changePassword = async (req, res) => {
         console.error("Change password error:", error);
         res.status(500).json({ message: "Failed to change password" });
     }
-};
+}
 
 /**
  * @desc    Get student's enrolled courses with progress
  * @route   GET /api/student/my-courses
  * @access  Private (Student)
  */
-exports.getStudentCourses = async (req, res) => {
+export async function getStudentCourses(req, res) {
     try {
         const studentId = req.user.id;
 
-        const enrollments = await Enrollment.find({ student: studentId })
-            .populate("course", "courseName modules image") // Adjust fields as per your Course model
-            .populate("batch", "name")
-            .lean();
+        // Use User.enrolledCourses which references Course and Batch
+        const user = await User.findById(studentId)
+          .populate({ path: 'enrolledCourses.course', select: 'courseName modules thumbnail instructor' })
+          .populate({ path: 'enrolledCourses.batch', select: 'name' })
+          .lean();
 
-        const enrolledCourses = enrollments.map(enrollment => {
-            const course = enrollment.course;
-            const modules = course.modules || [];
-            
-            // Calculate total and completed lessons
-            let totalLessons = 0;
-            let completedLessons = 0;
+        if (!user) return res.status(404).json({ message: 'User not found' });
 
-            const enrichedModules = modules.map((module, modIdx) => {
-                const sections = module.sections || [];
-                totalLessons += sections.length;
-
-                const enrichedSections = sections.map((section, secIdx) => {
-                    const progress = enrollment.lessonProgress?.find(
-                        p => p.moduleIndex === modIdx && p.sectionIndex === secIdx
-                    );
-                    const isCompleted = progress?.isCompleted || false;
-                    if (isCompleted) completedLessons++;
-
-                    return {
-                        sectionName: section.sectionName || section.title,
-                        isCompleted
-                    };
-                });
-
-                return {
-                    moduleName: module.title || module.moduleName,
-                    sections: enrichedSections
-                };
-            });
-
-            const progressPercentage = totalLessons > 0 
-                ? Math.round((completedLessons / totalLessons) * 100) 
-                : 0;
-
-            return {
-                courseId: course._id,
-                courseName: course.courseName,
-                courseImage: course.image || "/default-course.jpg",
-                instructor: "Instructor Name", // TODO: Get from course instructor field
-                category: "Category", // TODO: Get from course category field
-                totalLessons,
-                completedLessons,
-                progressPercentage,
-                modules: enrichedModules
-            };
-        });
+        const enrolledCourses = (user.enrolledCourses || []).map(ec => ({
+            courseId: ec.course?._id,
+            courseName: ec.course?.courseName,
+            thumbnail: ec.course?.thumbnail || null,
+            batchId: ec.batch?._id || null,
+            batchName: ec.batch?.name || null,
+            enrolledAt: ec.enrolledAt,
+            // progress calculation not implemented here (depends on how you track lesson progress)
+        }));
 
         res.json({ enrolledCourses });
     } catch (error) {
         console.error("Get courses error:", error);
         res.status(500).json({ message: "Failed to fetch courses" });
     }
-};
+}
 
 /**
  * @desc    Get detailed progress for a specific course
  * @route   GET /api/student/course/:courseId/progress
  * @access  Private (Student)
  */
-exports.getCourseProgress = async (req, res) => {
+export async function getCourseProgress(req, res) {
     try {
         const studentId = req.user.id;
         const { courseId } = req.params;
 
-        const enrollment = await Enrollment.findOne({
-            student: studentId,
-            course: courseId
-        }).populate("course").lean();
+        // Return course and any enrollment info from the user document
+        const user = await User.findById(studentId).lean();
+        if (!user) return res.status(404).json({ message: 'User not found' });
 
-        if (!enrollment) {
-            return res.status(404).json({ message: "Enrollment not found" });
-        }
+        const course = await Course.findById(courseId).lean();
+        if (!course) return res.status(404).json({ message: 'Course not found' });
 
-        res.json(enrollment);
+        const enrollment = (user.enrolledCourses || []).find(ec => String(ec.course) === String(courseId)) || null;
+
+        res.json({ course, enrollment });
     } catch (error) {
         console.error("Get course progress error:", error);
         res.status(500).json({ message: "Failed to fetch course progress" });
     }
-};
+}

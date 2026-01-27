@@ -1,13 +1,7 @@
-const express = require("express");
-const router = express.Router();
-const { protect, authorizeRoles } = require("../middleware/authMiddleware");
-const {
-    getStudentProfile,
-    updateStudentProfile,
-    changePassword,
-    getStudentCourses,
-    getCourseProgress
-} = require("../controllers/studentController");
+import { Router } from "express";
+const router = Router();
+import { protect, authorizeRoles } from "../middlewares/authMiddleware.js";
+import { getStudentProfile, updateStudentProfile, changePassword, getStudentCourses, getCourseProgress } from "../controllers/studentController.js";
 
 // Profile routes
 router.get("/profile", protect, authorizeRoles("student"), getStudentProfile);
@@ -18,4 +12,4 @@ router.post("/change-password", protect, authorizeRoles("student"), changePasswo
 router.get("/my-courses", protect, authorizeRoles("student"), getStudentCourses);
 router.get("/course/:courseId/progress", protect, authorizeRoles("student"), getCourseProgress);
 
-module.exports = router;
+export default router;
