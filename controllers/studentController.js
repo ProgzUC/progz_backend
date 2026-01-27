@@ -171,16 +171,67 @@ export async function getCourseProgress(req, res) {
         const studentId = req.user.id;
         const { courseId } = req.params;
 
-        // Return course and any enrollment info from the user document
+        // Return course and enrollment + batch-based progress info
         const user = await User.findById(studentId).lean();
         if (!user) return res.status(404).json({ message: 'User not found' });
 
         const course = await Course.findById(courseId).lean();
         if (!course) return res.status(404).json({ message: 'Course not found' });
 
+        // Find user's enrollment for this course (may contain batch reference)
         const enrollment = (user.enrolledCourses || []).find(ec => String(ec.course) === String(courseId)) || null;
 
-        res.json({ course, enrollment });
+        // Determine the batch to use for progress (prefer enrollment.batch)
+        let batch = null;
+        if (enrollment && enrollment.batch) {
+            batch = await Batch.findById(enrollment.batch).lean();
+        } else {
+            // fallback: find any batch for this course that includes the student
+            batch = await Batch.findOne({ course: courseId, students: studentId }).lean();
+        }
+
+        // Compute totals from course modules
+        const totalSections = (course.modules || []).reduce(
+            (acc, mod) => acc + (mod.sections?.length || 0),
+            0
+        );
+
+        // Compute completed sections by this student within the batch
+        let completedSections = 0;
+        let completedList = [];
+        if (batch && Array.isArray(batch.sectionProgress)) {
+            completedList = batch.sectionProgress
+                .filter(sp => sp.isCompleted && String(sp.completedBy) === String(studentId))
+                .map(sp => ({ moduleIndex: sp.moduleIndex, sectionIndex: sp.sectionIndex, completionTime: sp.completionTime }));
+            completedSections = completedList.length;
+        }
+
+        const completionPercentage = totalSections > 0 ? Math.round((completedSections / totalSections) * 100) : 0;
+
+        const batchInfo = batch
+            ? {
+                  batchId: batch._id,
+                  batchName: batch.name,
+                  startDate: batch.startDate,
+                  endDate: batch.endDate,
+                  status: batch.status,
+                  classTiming: batch.classTiming,
+                  meetLink: batch.meetLink,
+                  daysOfWeek: batch.daysOfWeek,
+              }
+            : null;
+
+        res.json({
+            course: { courseId: course._id, courseName: course.courseName },
+            enrollment,
+            batch: batchInfo,
+            progress: {
+                totalSections,
+                completedSections,
+                completionPercentage,
+                completedList,
+            },
+        });
     } catch (error) {
         console.error("Get course progress error:", error);
         res.status(500).json({ message: "Failed to fetch course progress" });
