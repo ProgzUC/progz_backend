@@ -1,5 +1,6 @@
 import User from "../models/User.js";
 import Course from "../models/Course.js";
+import Batch from "../models/Batch.js";
 import bcrypt from "bcryptjs";
 
 /**
@@ -121,15 +122,37 @@ export async function getStudentCourses(req, res) {
 
         if (!user) return res.status(404).json({ message: 'User not found' });
 
-        const enrolledCourses = (user.enrolledCourses || []).map(ec => ({
-            courseId: ec.course?._id,
-            courseName: ec.course?.courseName,
-            thumbnail: ec.course?.thumbnail || null,
-            batchId: ec.batch?._id || null,
-            batchName: ec.batch?.name || null,
-            enrolledAt: ec.enrolledAt,
-            // progress calculation not implemented here (depends on how you track lesson progress)
-        }));
+        // For each enrolled course, compute progress using Batch.sectionProgress where possible
+        const enrolledCourses = [];
+        for (const ec of (user.enrolledCourses || [])) {
+            const courseDoc = ec.course || null;
+            const batchId = ec.batch || null;
+
+            const totalSections = courseDoc?.modules?.reduce((acc, m) => acc + (m.sections?.length || 0), 0) || 0;
+
+            let completedLessons = 0;
+            if (batchId) {
+                const batch = await Batch.findById(batchId).lean();
+                if (batch && Array.isArray(batch.sectionProgress)) {
+                    // Count entries where completedBy matches this student
+                    completedLessons = batch.sectionProgress.filter(sp => String(sp.completedBy) === String(user._id)).length;
+                }
+            }
+
+            const progressPercentage = totalSections > 0 ? Math.round((completedLessons / totalSections) * 100) : 0;
+
+            enrolledCourses.push({
+                courseId: courseDoc?._id,
+                courseName: courseDoc?.courseName,
+                thumbnail: courseDoc?.thumbnail || null,
+                batchId: batchId || null,
+                batchName: ec.batch?.name || null,
+                enrolledAt: ec.enrolledAt,
+                totalLessons: totalSections,
+                completedLessons,
+                progressPercentage,
+            });
+        }
 
         res.json({ enrolledCourses });
     } catch (error) {

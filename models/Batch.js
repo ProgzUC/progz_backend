@@ -72,7 +72,6 @@ const batchSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
-batchSchema.index({ "trainers.trainer": 1 });
-batchSchema.index({ status: 1 });
+// indexes are already declared on fields (index: true). Avoid duplicate index definitions.
 
 export default mongoose.model("Batch", batchSchema);
