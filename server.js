@@ -12,6 +12,7 @@ import userRoutes from "./routes/userRoutes.js";
 import binRoutes from "./routes/binRoutes.js";
 import syncRoutes from "./routes/syncRoutes.js";
 import batchRoutes from "./routes/batchRoutes.js";
+import studentRoutes from "./routes/studentRoutes.js";
 import { initCronJobs } from "./jobs/cronJobs.js";
 dotenv.config();
 
@@ -30,6 +31,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/bin", binRoutes);
 app.use("/api/sync", syncRoutes);
 app.use("/api/batches", batchRoutes);
+app.use("/api/student", studentRoutes);
 
 initCronJobs();
 
