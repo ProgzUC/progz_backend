@@ -111,79 +111,82 @@ export async function changePassword(req, res) {
  * @access  Private (Student)
  */
 export async function getStudentCourses(req, res) {
-    try {
-        const studentId = req.user.id;
+  try {
+    const studentId = req.user.id;
 
-        // Use User.enrolledCourses which references Course and Batch
-        const user = await User.findById(studentId)
-            .populate({ path: 'enrolledCourses.course', select: 'courseName modules thumbnail instructor' })
-            .populate({ path: 'enrolledCourses.batch', select: 'name' })
-            .lean();
+    const user = await User.findById(studentId)
+      .populate({ path: "enrolledCourses.course", select: "courseName modules thumbnail instructor" })
+      .populate({ path: "enrolledCourses.batch", select: "name sectionProgress" })
+      .lean();
 
-        if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-        // For each enrolled course, compute progress using Batch.sectionProgress where possible
-        const enrolledCourses = [];
-        for (const ec of (user.enrolledCourses || [])) {
-            const courseDoc = ec.course || null;
-            const batchId = ec.batch || null;
+    const enrolledCourses = [];
 
-            const totalSections = courseDoc?.modules?.reduce((acc, m) => acc + (m.sections?.length || 0), 0) || 0;
+    for (const ec of user.enrolledCourses || []) {
+      const courseDoc = ec.course;
+      const batch = ec.batch;
 
-            let completedLessons = 0;
-            if (batchId) {
-                const batch = await Batch.findById(batchId).lean();
-                if (batch && Array.isArray(batch.sectionProgress)) {
-                    // Count entries where completedBy matches this student
-                    completedLessons = batch.sectionProgress.filter(sp => String(sp.completedBy) === String(user._id)).length;
-                }
-            }
+      const totalSections =
+        courseDoc?.modules?.reduce(
+          (acc, m) => acc + (m.sections?.length || 0),
+          0
+        ) || 0;
 
-            const progressPercentage = totalSections > 0 ? Math.round((completedLessons / totalSections) * 100) : 0;
+      let completedList = [];
+      if (batch && Array.isArray(batch.sectionProgress)) {
+        completedList = batch.sectionProgress.filter(
+          sp =>
+            sp.isCompleted &&
+            String(sp.completedBy) === String(user._id)
+        );
+      }
 
-            enrolledCourses.push({
-                courseId: courseDoc?._id,
-                courseName: courseDoc?.courseName,
-                thumbnail: courseDoc?.thumbnail || null,
-                instructor: courseDoc?.instructor || "Instructor Name",
-                category: "Development", // Add category if available
-                courseImage: courseDoc?.thumbnail || null, // Frontend expects 'courseImage'
-                batchId: batchId || null,
-                batchName: ec.batch?.name || null,
-                enrolledAt: ec.enrolledAt,
-                totalLessons: totalSections,
-                completedLessons,
-                progressPercentage,
+      const completedLessons = completedList.length;
+      const progressPercentage =
+        totalSections > 0
+          ? Math.round((completedLessons / totalSections) * 100)
+          : 0;
 
-                // ADD THIS - Include modules with completion status
-                modules: (courseDoc?.modules || []).map((module, modIdx) => ({
-                    moduleName: module.title || module.moduleName,
-                    title: module.title || module.moduleName,
-                    sections: (module.sections || []).map((section, secIdx) => {
-                        // Check if this section is completed by this student
-                        let isCompleted = false;
-                        if (batchId) {
-                            // You'll need to check batch.sectionProgress here
-                            // For now, set to false - you can enhance this later
-                            isCompleted = false;
-                        }
+      enrolledCourses.push({
+        courseId: courseDoc?._id,
+        courseName: courseDoc?.courseName,
+        thumbnail: courseDoc?.thumbnail || null,
+        instructor: courseDoc?.instructor || "Instructor Name",
+        category: "Development",
+        courseImage: courseDoc?.thumbnail || null,
+        batchId: batch?._id || null,
+        batchName: batch?.name || null,
+        enrolledAt: ec.enrolledAt,
+        totalLessons: totalSections,
+        completedLessons,
+        progressPercentage,
 
-                        return {
-                            sectionName: section.sectionName || section.title,
-                            title: section.title || section.sectionName,
-                            isCompleted
-                        };
-                    })
-                }))
-            });
-        }
+        modules: (courseDoc?.modules || []).map((module, modIdx) => ({
+          moduleName: module.title,
+          title: module.title,
+          sections: (module.sections || []).map((section, secIdx) => {
+            const isCompleted = completedList.some(
+              c => c.moduleIndex === modIdx && c.sectionIndex === secIdx
+            );
 
-        res.json({ enrolledCourses });
-    } catch (error) {
-        console.error("Get courses error:", error);
-        res.status(500).json({ message: "Failed to fetch courses" });
+            return {
+              sectionName: section.sectionName,
+              title: section.sectionName,
+              isCompleted,
+            };
+          }),
+        })),
+      });
     }
+
+    res.json({ enrolledCourses });
+  } catch (error) {
+    console.error("Get courses error:", error);
+    res.status(500).json({ message: "Failed to fetch courses" });
+  }
 }
+
 
 /**
  * @desc    Get detailed progress for a specific course
