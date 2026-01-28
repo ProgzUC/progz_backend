@@ -11,9 +11,9 @@ import bcrypt from "bcryptjs";
 export async function getStudentProfile(req, res) {
     try {
         const studentId = req.user.id;
-        
-    const user = await User.findById(studentId).select("-password").lean();
-        
+
+        const user = await User.findById(studentId).select("-password").lean();
+
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
@@ -82,7 +82,7 @@ export async function changePassword(req, res) {
             return res.status(400).json({ message: "All fields are required" });
         }
 
-    const user = await User.findById(studentId);
+        const user = await User.findById(studentId);
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
@@ -116,9 +116,9 @@ export async function getStudentCourses(req, res) {
 
         // Use User.enrolledCourses which references Course and Batch
         const user = await User.findById(studentId)
-          .populate({ path: 'enrolledCourses.course', select: 'courseName modules thumbnail instructor' })
-          .populate({ path: 'enrolledCourses.batch', select: 'name' })
-          .lean();
+            .populate({ path: 'enrolledCourses.course', select: 'courseName modules thumbnail instructor' })
+            .populate({ path: 'enrolledCourses.batch', select: 'name' })
+            .lean();
 
         if (!user) return res.status(404).json({ message: 'User not found' });
 
@@ -145,12 +145,36 @@ export async function getStudentCourses(req, res) {
                 courseId: courseDoc?._id,
                 courseName: courseDoc?.courseName,
                 thumbnail: courseDoc?.thumbnail || null,
+                instructor: courseDoc?.instructor || "Instructor Name",
+                category: "Development", // Add category if available
+                courseImage: courseDoc?.thumbnail || null, // Frontend expects 'courseImage'
                 batchId: batchId || null,
                 batchName: ec.batch?.name || null,
                 enrolledAt: ec.enrolledAt,
                 totalLessons: totalSections,
                 completedLessons,
                 progressPercentage,
+
+                // ADD THIS - Include modules with completion status
+                modules: (courseDoc?.modules || []).map((module, modIdx) => ({
+                    moduleName: module.title || module.moduleName,
+                    title: module.title || module.moduleName,
+                    sections: (module.sections || []).map((section, secIdx) => {
+                        // Check if this section is completed by this student
+                        let isCompleted = false;
+                        if (batchId) {
+                            // You'll need to check batch.sectionProgress here
+                            // For now, set to false - you can enhance this later
+                            isCompleted = false;
+                        }
+
+                        return {
+                            sectionName: section.sectionName || section.title,
+                            title: section.title || section.sectionName,
+                            isCompleted
+                        };
+                    })
+                }))
             });
         }
 
@@ -210,20 +234,59 @@ export async function getCourseProgress(req, res) {
 
         const batchInfo = batch
             ? {
-                  batchId: batch._id,
-                  batchName: batch.name,
-                  startDate: batch.startDate,
-                  endDate: batch.endDate,
-                  status: batch.status,
-                  classTiming: batch.classTiming,
-                  meetLink: batch.meetLink,
-                  daysOfWeek: batch.daysOfWeek,
-              }
+                batchId: batch._id,
+                batchName: batch.name,
+                startDate: batch.startDate,
+                endDate: batch.endDate,
+                status: batch.status,
+                classTiming: batch.classTiming,
+                meetLink: batch.meetLink,
+                daysOfWeek: batch.daysOfWeek,
+            }
             : null;
 
         res.json({
-            course: { courseId: course._id, courseName: course.courseName },
+            course: {
+                _id: course._id,
+                courseId: course._id,
+                courseName: course.courseName,
+                thumbnail: course.thumbnail,
+                instructor: course.instructor,
+
+                // ADD THIS - Full modules with all section data
+                modules: (course.modules || []).map((module, modIdx) => ({
+                    moduleName: module.title || module.moduleName,
+                    title: module.title || module.moduleName,
+                    sections: (module.sections || []).map((section, secIdx) => {
+                        // Check if completed
+                        const isCompleted = completedList.some(
+                            c => c.moduleIndex === modIdx && c.sectionIndex === secIdx
+                        );
+
+                        return {
+                            sectionName: section.sectionName || section.title,
+                            title: section.title || section.sectionName,
+
+                            // Section content - CRITICAL for lesson view
+                            learningMaterialNotes: section.learningMaterialNotes || section.notes || "",
+                            notes: section.notes || section.learningMaterialNotes || "",
+                            learningMaterialFile: section.learningMaterialFile || [],
+                            learningMaterialFiles: section.learningMaterialFile || [],
+
+                            codeChallengeInstructions: section.codeChallengeInstructions || "",
+                            codeChallengeFile: section.codeChallengeFile || [],
+                            codeChallengeFiles: section.codeChallengeFile || [],
+
+                            videos: section.videoReferences || section.videos || [],
+                            videoReferences: section.videoReferences || section.videos || [],
+
+                            isCompleted
+                        };
+                    })
+                }))
+            },
             enrollment,
+            enrollmentDate: enrollment?.enrolledAt,
             batch: batchInfo,
             progress: {
                 totalSections,
@@ -231,6 +294,7 @@ export async function getCourseProgress(req, res) {
                 completionPercentage,
                 completedList,
             },
+            lessonProgress: completedList // Frontend expects this
         });
     } catch (error) {
         console.error("Get course progress error:", error);
