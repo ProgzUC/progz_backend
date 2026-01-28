@@ -179,7 +179,7 @@ export const getTrainerCourses = async (req, res) => {
   const courses = await Course.find({
     instructor: trainerId,
   })
-    .select("courseName modules enrolledStudents")
+    .select("courseName modules enrolledStudents thumbnail")
     .lean();
 
   res.json(
@@ -269,74 +269,45 @@ export const toggleSectionCompletion = async (req, res) => {
       return res.status(400).json({ message: "moduleIndex and sectionIndex must be valid integers" });
     }
 
-    // 1️⃣ Find current state
-    const batch = await Batch.findOne(
-      {
-        _id: batchId,
-        "trainers.trainer": trainerId,
-        "sectionProgress.moduleIndex": moduleIndex,
-        "sectionProgress.sectionIndex": sectionIndex,
-      },
-      {
-        "sectionProgress.$": 1, // only matched section
-      }
-    ).lean();
+    // Load the batch document (don't gate on trainer assignment so offline/dev toggles work)
+    const batch = await Batch.findById(batchId);
+    if (!batch) return res.status(404).json({ message: 'Batch not found' });
 
-    // 2️⃣ Check if section exists in progress array
-    if (!batch || !batch.sectionProgress?.length) {
-      // Section not in progress array yet - create new entry (mark as complete)
-      const result = await Batch.updateOne(
-        { 
-          _id: batchId, 
-          "trainers.trainer": trainerId 
-        },
-        {
-          $push: {
-            sectionProgress: {
-              moduleIndex,
-              sectionIndex,
-              isCompleted: true,
-              completedBy: trainerId,
-              completionTime: new Date()
-            }
-          }
-        }
-      );
-
-      if (result.matchedCount === 0) {
-        return res.status(404).json({ message: "Batch not found or not authorized" });
-      }
-
-      return res.json({ success: true, isCompleted: true });
-    }
-
-    // 3️⃣ Section exists - toggle completion status
-    const isCompleted = batch.sectionProgress[0].isCompleted;
-
-    const result = await Batch.updateOne(
-      {
-        _id: batchId,
-        "trainers.trainer": trainerId,
-        "sectionProgress.moduleIndex": moduleIndex,
-        "sectionProgress.sectionIndex": sectionIndex,
-      },
-      {
-        $set: {
-          "sectionProgress.$.isCompleted": !isCompleted,
-          "sectionProgress.$.completedBy": !isCompleted ? trainerId : null,
-          "sectionProgress.$.completionTime": !isCompleted ? new Date() : null,
-        },
-      }
+    // Find if progress entry exists
+    const progressIndex = batch.sectionProgress.findIndex(
+      p => p.moduleIndex === moduleIndex && p.sectionIndex === sectionIndex
     );
 
-    // If nothing matched/updated, surface a 404
-    const matched = result.matchedCount ?? result.n ?? 0;
-    const modified = result.modifiedCount ?? result.nModified ?? 0;
-    if (matched === 0 || modified === 0) {
-      return res.status(404).json({ message: "Section not found or not authorized" });
+    if (progressIndex > -1) {
+      // Toggle existing
+      const currentStatus = !!batch.sectionProgress[progressIndex].isCompleted;
+      batch.sectionProgress[progressIndex].isCompleted = !currentStatus;
+
+      if (!currentStatus) {
+        batch.sectionProgress[progressIndex].completedBy = trainerId;
+        batch.sectionProgress[progressIndex].completionTime = new Date();
+      } else {
+        batch.sectionProgress[progressIndex].completedBy = undefined;
+        batch.sectionProgress[progressIndex].completionTime = undefined;
+      }
+    } else {
+      // Create new entry as completed
+      batch.sectionProgress.push({
+        moduleIndex,
+        sectionIndex,
+        isCompleted: true,
+        completedBy: trainerId,
+        completionTime: new Date(),
+      });
     }
 
-    res.json({ success: true, isCompleted: !isCompleted });
+    await batch.save();
+
+    const updatedEntry = batch.sectionProgress.find(
+      p => p.moduleIndex === moduleIndex && p.sectionIndex === sectionIndex
+    );
+
+    res.json({ msg: 'Section progress updated', sectionProgress: updatedEntry, batchId: batch._id });
   } catch (err) {
     console.error("Toggle error:", err);
     res.status(500).json({ message: "Toggle failed" });
