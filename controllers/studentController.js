@@ -111,80 +111,78 @@ export async function changePassword(req, res) {
  * @access  Private (Student)
  */
 export async function getStudentCourses(req, res) {
-  try {
-    const studentId = req.user.id;
+    try {
+        const studentId = req.user.id;
 
-    const user = await User.findById(studentId)
-      .populate({ path: "enrolledCourses.course", select: "courseName modules thumbnail instructor" })
-      .populate({ path: "enrolledCourses.batch", select: "name sectionProgress" })
-      .lean();
+        const user = await User.findById(studentId)
+            .populate({ path: "enrolledCourses.course", select: "courseName modules thumbnail instructor" })
+            .populate({ path: "enrolledCourses.batch", select: "name sectionProgress" })
+            .lean();
 
-    if (!user) return res.status(404).json({ message: "User not found" });
+        if (!user) return res.status(404).json({ message: "User not found" });
 
-    const enrolledCourses = [];
+        const enrolledCourses = [];
 
-    for (const ec of user.enrolledCourses || []) {
-      const courseDoc = ec.course;
-      const batch = ec.batch;
+        for (const ec of user.enrolledCourses || []) {
+            const courseDoc = ec.course;
+            const batch = ec.batch;
 
-      const totalSections =
-        courseDoc?.modules?.reduce(
-          (acc, m) => acc + (m.sections?.length || 0),
-          0
-        ) || 0;
+            const totalSections =
+                courseDoc?.modules?.reduce(
+                    (acc, m) => acc + (m.sections?.length || 0),
+                    0
+                ) || 0;
 
-      let completedList = [];
-      if (batch && Array.isArray(batch.sectionProgress)) {
-        completedList = batch.sectionProgress.filter(
-          sp =>
-            sp.isCompleted &&
-            String(sp.completedBy) === String(user._id)
-        );
-      }
+            let completedList = [];
+            if (batch && Array.isArray(batch.sectionProgress)) {
+                completedList = batch.sectionProgress.filter(
+                    sp => sp.isCompleted  // Section marked complete in batch (trainer-marked)
+                );
+            }
 
-      const completedLessons = completedList.length;
-      const progressPercentage =
-        totalSections > 0
-          ? Math.round((completedLessons / totalSections) * 100)
-          : 0;
+            const completedLessons = completedList.length;
+            const progressPercentage =
+                totalSections > 0
+                    ? Math.round((completedLessons / totalSections) * 100)
+                    : 0;
 
-      enrolledCourses.push({
-        courseId: courseDoc?._id,
-        courseName: courseDoc?.courseName,
-        thumbnail: courseDoc?.thumbnail || null,
-        instructor: courseDoc?.instructor || "Instructor Name",
-        category: "Development",
-        courseImage: courseDoc?.thumbnail || null,
-        batchId: batch?._id || null,
-        batchName: batch?.name || null,
-        enrolledAt: ec.enrolledAt,
-        totalLessons: totalSections,
-        completedLessons,
-        progressPercentage,
+            enrolledCourses.push({
+                courseId: courseDoc?._id,
+                courseName: courseDoc?.courseName,
+                thumbnail: courseDoc?.thumbnail || null,
+                instructor: courseDoc?.instructor || "Instructor Name",
+                category: "Development",
+                courseImage: courseDoc?.thumbnail || null,
+                batchId: batch?._id || null,
+                batchName: batch?.name || null,
+                enrolledAt: ec.enrolledAt,
+                totalLessons: totalSections,
+                completedLessons,
+                progressPercentage,
 
-        modules: (courseDoc?.modules || []).map((module, modIdx) => ({
-          moduleName: module.title,
-          title: module.title,
-          sections: (module.sections || []).map((section, secIdx) => {
-            const isCompleted = completedList.some(
-              c => c.moduleIndex === modIdx && c.sectionIndex === secIdx
-            );
+                modules: (courseDoc?.modules || []).map((module, modIdx) => ({
+                    moduleName: module.title,
+                    title: module.title,
+                    sections: (module.sections || []).map((section, secIdx) => {
+                        const isCompleted = completedList.some(
+                            c => c.moduleIndex === modIdx && c.sectionIndex === secIdx
+                        );
 
-            return {
-              sectionName: section.sectionName,
-              title: section.sectionName,
-              isCompleted,
-            };
-          }),
-        })),
-      });
+                        return {
+                            sectionName: section.sectionName,
+                            title: section.sectionName,
+                            isCompleted,
+                        };
+                    }),
+                })),
+            });
+        }
+
+        res.json({ enrolledCourses });
+    } catch (error) {
+        console.error("Get courses error:", error);
+        res.status(500).json({ message: "Failed to fetch courses" });
     }
-
-    res.json({ enrolledCourses });
-  } catch (error) {
-    console.error("Get courses error:", error);
-    res.status(500).json({ message: "Failed to fetch courses" });
-  }
 }
 
 
@@ -223,12 +221,12 @@ export async function getCourseProgress(req, res) {
             0
         );
 
-        // Compute completed sections by this student within the batch
+        // Compute completed sections in the batch (marked by trainer as taught/covered)
         let completedSections = 0;
         let completedList = [];
         if (batch && Array.isArray(batch.sectionProgress)) {
             completedList = batch.sectionProgress
-                .filter(sp => sp.isCompleted && String(sp.completedBy) === String(studentId))
+                .filter(sp => sp.isCompleted)  // Section marked complete in batch (trainer-marked)
                 .map(sp => ({ moduleIndex: sp.moduleIndex, sectionIndex: sp.sectionIndex, completionTime: sp.completionTime }));
             completedSections = completedList.length;
         }
