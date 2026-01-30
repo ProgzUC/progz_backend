@@ -12,12 +12,19 @@ import {
 
 console.log("🔧 Loading classSessionRoutes.js");
 
-// Test route to verify router is working
+// Health check route (no auth required)
 router.get("/health", (req, res) => {
     res.json({
         message: "Class session routes are working!",
         timestamp: new Date(),
-        routes: ["/start (POST)", "/:id/attendance (PATCH)", "/:id/end (PATCH)"]
+        availableRoutes: [
+            "POST /start",
+            "PATCH /:id/attendance",
+            "PATCH /:id/end",
+            "GET /batch/:batchId",
+            "GET /student/me",
+            "GET /batch/:batchId/report"
+        ]
     });
 });
 
@@ -36,4 +43,3 @@ router.get("/batch/:batchId/report", protect, authorizeRoles("admin", "trainer")
 console.log("✅ Class session routes defined successfully");
 
 export default router;
-
