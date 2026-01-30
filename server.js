@@ -37,6 +37,14 @@ app.use("/api/student", studentRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/class-session", classSessionRoutes);
 
+// Debug: Log that class session routes are loaded
+console.log("✅ Class session routes registered at /api/class-session");
+
+// Test route to verify server is working
+app.get("/api/test", (req, res) => {
+    res.json({ message: "Server is working", timestamp: new Date() });
+});
+
 initCronJobs();
 
 // const createDemoUsers = async () => {
