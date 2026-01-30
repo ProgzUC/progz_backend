@@ -39,6 +39,17 @@ app.use("/api/class-session", classSessionRoutes);
 
 // Debug: Log that class session routes are loaded
 console.log("✅ Class session routes registered at /api/class-session");
+console.log("📋 Class session routes object:", classSessionRoutes);
+console.log("📋 Type of classSessionRoutes:", typeof classSessionRoutes);
+
+// List all registered routes for debugging
+app._router.stack.forEach(function (r) {
+    if (r.route && r.route.path) {
+        console.log("Registered route:", r.route.path)
+    } else if (r.name === 'router') {
+        console.log("Registered router at:", r.regexp);
+    }
+});
 
 // Test route to verify server is working
 app.get("/api/test", (req, res) => {
