@@ -98,6 +98,7 @@ export const forgotPassword = async (req, res) => {
 
     res.json({ msg: "Password reset link sent" });
   } catch (error) {
+    console.error("Email send error:", error); // Log the actual error
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
     await user.save();
