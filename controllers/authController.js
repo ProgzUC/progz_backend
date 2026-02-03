@@ -2,6 +2,7 @@ import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { generateAccessToken, generateRefreshToken } from "../utils/generateTokens.js";
+import sendEmail from "../utils/sendEmail.js";
 
 export const register = async (req, res) => {
   try {
@@ -82,10 +83,27 @@ export const forgotPassword = async (req, res) => {
 
   const resetLink = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
 
-  // TODO: send email
-  console.log("Reset Link:", resetLink);
+  const message = `
+    <h1>You have requested a password reset</h1>
+    <p>Please go to this link to reset your password:</p>
+    <a href=${resetLink} clicktracking=off>${resetLink}</a>
+  `;
 
-  res.json({ msg: "Password reset link sent" });
+  try {
+    await sendEmail({
+      email: user.email,
+      subject: "Password Reset Request",
+      html: message,
+    });
+
+    res.json({ msg: "Password reset link sent" });
+  } catch (error) {
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    return res.status(500).json({ msg: "Email could not be sent" });
+  }
 };
 
 
