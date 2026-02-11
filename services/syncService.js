@@ -10,7 +10,7 @@ export const syncInstructors = async () => {
         if (data.success) {
             for (const t of data.trainers) {
                 const email = t.trainer_email;
-                
+
                 // Check Main User
                 const userExists = await User.findOne({ email });
                 if (userExists) continue;
@@ -142,7 +142,6 @@ export const syncStudents = async () => {
                             email,
                             phone,
                             password,
-                            address,
                             address,
                             role: 'student',
                             enrolledCourses,

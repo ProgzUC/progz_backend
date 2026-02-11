@@ -20,89 +20,89 @@ export const trainerBootstrap = async (req, res) => {
     let completedBatches = [];
     let upcomingClasses = [];
 
-   batches.forEach(batch => {
-  totalStudents += batch.students?.length || 0;
+    batches.forEach(batch => {
+      totalStudents += batch.students?.length || 0;
 
-  const course = batch.course;
-  if (!course || !course.modules) {
-    console.warn("Course not populated for batch:", batch._id);
-    return;
-  }
+      const course = batch.course;
+      if (!course || !course.modules) {
+        console.warn("Course not populated for batch:", batch._id);
+        return;
+      }
 
-  const totalSections = course.modules.reduce(
-    (acc, m) => acc + (m.sections?.length || 0),
-    0
-  );
+      const totalSections = course.modules.reduce(
+        (acc, m) => acc + (m.sections?.length || 0),
+        0
+      );
 
-  const completedSections =
-    batch.sectionProgress?.filter(s => s.isCompleted).length || 0;
+      const completedSections =
+        batch.sectionProgress?.filter(s => s.isCompleted).length || 0;
 
-  const completionPercentage =
-    totalSections === 0
-      ? 0
-      : Math.round((completedSections / totalSections) * 100);
+      const completionPercentage =
+        totalSections === 0
+          ? 0
+          : Math.round((completedSections / totalSections) * 100);
 
-  if (batch.status === "active") {
-    // compose human-friendly timing string from classTiming object
-    const timingStr = batch.classTiming
-      ? `${batch.classTiming.startTime} - ${batch.classTiming.endTime} ${batch.classTiming.timezone || ""}`.trim()
-      : null;
+      if (batch.status === "active") {
+        // compose human-friendly timing string from classTiming object
+        const timingStr = batch.classTiming
+          ? `${batch.classTiming.startTime} - ${batch.classTiming.endTime} ${batch.classTiming.timezone || ""}`.trim()
+          : null;
 
-    // get trainer-specific assignment data (assignedModules, isCurrent)
-    const trainerAssign = batch.trainers?.find(t => String(t.trainer) === String(trainerId)) || null;
+        // get trainer-specific assignment data (assignedModules, isCurrent)
+        const trainerAssign = batch.trainers?.find(t => String(t.trainer) === String(trainerId)) || null;
 
-    activeBatches.push({
-      batchId: batch._id,
-      batchName: batch.name,
-      courseName: course.courseName,
-      duration: course.courseDuration,
-      studentsCount: batch.students?.length || 0,
-      timing: timingStr,
-      startDate: batch.startDate,
-      meetLink: batch.meetLink,
-      completionPercentage,
-      trainerAssignment: trainerAssign
-        ? {
-            assignedModules: trainerAssign.assignedModules || [],
-            isCurrent: !!trainerAssign.isCurrent,
-            fromDate: trainerAssign.fromDate || null,
-            toDate: trainerAssign.toDate || null,
-          }
-        : null,
+        activeBatches.push({
+          batchId: batch._id,
+          batchName: batch.name,
+          courseName: course.courseName,
+          duration: course.courseDuration,
+          studentsCount: batch.students?.length || 0,
+          timing: timingStr,
+          startDate: batch.startDate,
+          meetLink: batch.meetLink,
+          completionPercentage,
+          trainerAssignment: trainerAssign
+            ? {
+              assignedModules: trainerAssign.assignedModules || [],
+              isCurrent: !!trainerAssign.isCurrent,
+              fromDate: trainerAssign.fromDate || null,
+              toDate: trainerAssign.toDate || null,
+            }
+            : null,
+        });
+
+        const nextClassDate = getNextClassDate(batch.daysOfWeek, batch.classTiming);
+
+        if (nextClassDate) {
+          upcomingClasses.push({
+            batchId: batch._id,
+            batchName: batch.name,
+            courseName: course.courseName,
+            timing: timingStr,
+            meetLink: batch.meetLink,
+            nextClassAt: nextClassDate,
+          });
+        }
+      }
+
+      if (batch.status === "completed") {
+        completedBatches.push({
+          batchId: batch._id,
+          batchName: batch.name,
+          courseName: course.courseName,
+          startDate: batch.startDate,
+          endDate: batch.endDate
+        });
+      }
     });
-
-    const nextClassDate = getNextClassDate(batch.daysOfWeek, batch.classTiming);
-
-    if (nextClassDate) {
-      upcomingClasses.push({
-        batchId: batch._id,
-        batchName: batch.name,
-        courseName: course.courseName,
-        timing: timingStr,
-        meetLink: batch.meetLink,
-        nextClassAt: nextClassDate,
-      });
-    }
-  }
-
-  if (batch.status === "completed") {
-    completedBatches.push({
-      batchId: batch._id,
-      batchName: batch.name,
-      courseName: course.courseName,
-      startDate: batch.startDate,
-      endDate: batch.endDate
-    });
-  }
-});
 
 
     // only 3 upcoming classes
     upcomingClasses.sort(
-  (a, b) => new Date(a.nextClassAt) - new Date(b.nextClassAt)
-);
+      (a, b) => new Date(a.nextClassAt) - new Date(b.nextClassAt)
+    );
 
-upcomingClasses = upcomingClasses.slice(0, 3);
+    upcomingClasses = upcomingClasses.slice(0, 3);
 
 
     res.json({
@@ -161,11 +161,11 @@ export const getTrainerBatchDetails = async (req, res) => {
       sectionProgress: batch.sectionProgress,
       trainerAssignment: trainerAssign
         ? {
-            assignedModules: trainerAssign.assignedModules || [],
-            isCurrent: !!trainerAssign.isCurrent,
-            fromDate: trainerAssign.fromDate || null,
-            toDate: trainerAssign.toDate || null,
-          }
+          assignedModules: trainerAssign.assignedModules || [],
+          isCurrent: !!trainerAssign.isCurrent,
+          fromDate: trainerAssign.fromDate || null,
+          toDate: trainerAssign.toDate || null,
+        }
         : null,
     });
   } catch (err) {

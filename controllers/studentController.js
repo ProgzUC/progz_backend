@@ -22,9 +22,20 @@ export async function getStudentProfile(req, res) {
             name: user.name,
             email: user.email,
             phone: user.phone || "",
-            location: user.location || "",
+            // New fields
+            altPhone: user.altPhone || "",
+            dob: user.dob || "",
+            gender: user.gender || "",
             education: user.education || "",
-            jobTitle: user.jobTitle || "",
+            university: user.university || "",
+            profession: user.profession || "",
+            employmentStatus: user.employmentStatus || "",
+            experience: user.experience || "",
+            skills: user.skills || "",
+
+            // Mapped/Legacy fields if frontend still expects them
+            location: user.address || "", // Map address to location
+            jobTitle: user.profession || "", // Map profession to jobTitle
             role: user.role
         });
     } catch (error) {
@@ -41,11 +52,35 @@ export async function getStudentProfile(req, res) {
 export async function updateStudentProfile(req, res) {
     try {
         const studentId = req.user.id;
-        const { phone, location, education, jobTitle } = req.body;
+        // Accept both new and old field names for compatibility
+        const {
+            phone, location, education, jobTitle,
+            altPhone, dob, gender, university, profession,
+            employmentStatus, experience, skills
+        } = req.body;
+
+        const updateData = {
+            phone,
+            education,
+            // Map legacy to new schema
+            address: location,
+            profession: profession || jobTitle,
+            // New fields
+            altPhone,
+            dob,
+            gender,
+            university,
+            employmentStatus,
+            experience,
+            skills
+        };
+
+        // Remove undefined fields
+        Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
 
         const user = await User.findByIdAndUpdate(
             studentId,
-            { phone, location, education, jobTitle },
+            updateData,
             { new: true, runValidators: true }
         ).select("-password").lean();
 
@@ -57,9 +92,20 @@ export async function updateStudentProfile(req, res) {
             name: user.name,
             email: user.email,
             phone: user.phone,
-            location: user.location,
+            address: user.address,
+            altPhone: user.altPhone,
+            dob: user.dob,
+            gender: user.gender,
             education: user.education,
-            jobTitle: user.jobTitle,
+            university: user.university,
+            profession: user.profession,
+            employmentStatus: user.employmentStatus,
+            experience: user.experience,
+            skills: user.skills,
+
+            // Legacy responses
+            location: user.address,
+            jobTitle: user.profession,
             role: user.role
         });
     } catch (error) {

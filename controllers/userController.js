@@ -63,23 +63,15 @@ export const approveUser = async (req, res) => {
         }
 
         // Move to User collection
-        // We explicitly map fields to avoid any extra junk from PendingUser if schema differs slightly, 
-        // though here they are nearly identical.
-        const newUser = await User.create({
-            name: pendingUser.name,
-            email: pendingUser.email,
-            password: pendingUser.password, // Already hashed
-            phone: pendingUser.phone,
-            altPhone: pendingUser.altPhone,
-            address: pendingUser.address,
-            dob: pendingUser.dob,
-            education: pendingUser.education,
-            university: pendingUser.university,
-            profession: pendingUser.profession,
-            employmentStatus: pendingUser.employmentStatus,
-            experience: pendingUser.experience,
-            role: pendingUser.role,
-        });
+        // Map all fields from PendingUser to User
+        const userData = pendingUser.toObject();
+        delete userData._id;
+        delete userData.createdAt;
+        delete userData.updatedAt;
+        delete userData.__v;
+        delete userData.status; // PendingUser specific
+
+        const newUser = await User.create(userData);
 
         // Remove from PendingUser
         await PendingUser.findByIdAndDelete(id);
@@ -205,7 +197,8 @@ export const updateUser = async (req, res) => {
         const allowedFields = [
             "name", "phone",
             "altPhone", "address", "dob", "education", "university",
-            "profession", "employmentStatus", "experience", "email"
+            "profession", "employmentStatus", "experience", "email",
+            "gender", "skills", "zenCourseName", "zenCourseType", "source"
         ];
 
         allowedFields.forEach((field) => {
