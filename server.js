@@ -25,6 +25,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.get("/ping", (req, res) => {
+  res.status(200).json({
+    status: "ok",
+    message: "pong",
+    time: new Date()
+  });
+});
+
 // createOrUpdateAdmin();
 app.use("/api/auth", authRoutes);
 app.use("/api/trainer", trainerRoutes)
