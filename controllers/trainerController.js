@@ -159,6 +159,9 @@ export const getTrainerBatchDetails = async (req, res) => {
       students: batch.students,
       curriculum: batch.course.modules,
       sectionProgress: batch.sectionProgress,
+      meetLink: batch.meetLink,
+      daysOfWeek: batch.daysOfWeek,
+      status: batch.status,
       trainerAssignment: trainerAssign
         ? {
           assignedModules: trainerAssign.assignedModules || [],
