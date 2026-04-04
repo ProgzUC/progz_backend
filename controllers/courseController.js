@@ -1,6 +1,7 @@
 import Course from "../models/Course.js";
 import CourseVersion from "../models/CourseVersion.js";
 import RecycleBin from "../models/RecycleBin.js";
+import User from "../models/User.js";
 
 // @desc    Create a new course
 // @route   POST /api/courses
@@ -45,28 +46,37 @@ export const createCourse = async (req, res) => {
 // @access  Private
 export const getAllCourses = async (req, res) => {
   try {
-    const courses = await Course.aggregate([
+    const courses = await Course.find({})
+      .populate("instructor", "name email")
+      .lean();
+
+    // Query User model to get enrolled student count per course
+    const enrollmentCounts = await User.aggregate([
+      { $unwind: "$enrolledCourses" },
       {
-        $lookup: {
-          from: "users",
-          localField: "instructor",
-          foreignField: "_id",
-          as: "instructor",
-          pipeline: [{ $project: { name: 1, email: 1 } }],
-        },
-      },
-      {
-        $addFields: {
-          enrolledCount: { $size: "$enrolledStudents" },
-        },
-      },
-      {
-        $project: {
-          enrolledStudents: 0, // exclude full array from list view
-        },
-      },
+        $group: {
+          _id: "$enrolledCourses.course",
+          count: { $sum: 1 }
+        }
+      }
     ]);
-    res.json(courses);
+
+    const countMap = {};
+    enrollmentCounts.forEach(item => {
+      if (item._id) countMap[item._id.toString()] = item.count;
+    });
+
+    // Format to include count and exclude full array
+    const formattedCourses = courses.map((course) => {
+      const { enrolledStudents, ...rest } = course;
+      return {
+        ...rest,
+        // The single source of truth for enrollments is User.enrolledCourses
+        enrolledCount: countMap[course._id.toString()] || 0,
+      };
+    });
+
+    res.json(formattedCourses);
   } catch (error) {
     console.error("Error fetching courses:", error);
     res.status(500).json({ message: "Server Error" });
