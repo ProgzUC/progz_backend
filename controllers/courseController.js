@@ -45,15 +45,34 @@ export const createCourse = async (req, res) => {
 // @access  Private
 export const getAllCourses = async (req, res) => {
   try {
-    const courses = await Course.find({})
-      .populate("instructor", "name email")
-      .lean();
+    const courses = await Course.aggregate([
+      {
+        $lookup: {
+          from: "users",
+          localField: "instructor",
+          foreignField: "_id",
+          as: "instructor",
+          pipeline: [{ $project: { name: 1, email: 1 } }],
+        },
+      },
+      {
+        $addFields: {
+          enrolledCount: { $size: "$enrolledStudents" },
+        },
+      },
+      {
+        $project: {
+          enrolledStudents: 0, // exclude full array from list view
+        },
+      },
+    ]);
     res.json(courses);
   } catch (error) {
     console.error("Error fetching courses:", error);
     res.status(500).json({ message: "Server Error" });
   }
 };
+
 
 // @desc    Get single course by ID
 // @route   GET /api/courses/:id
