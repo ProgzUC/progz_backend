@@ -81,6 +81,13 @@ export const createBatch = async (req, res) => {
       msg: "Batch created successfully",
       batch,
     });
+    
+    // Background: Update Course enrolledStudents
+    if (students.length > 0) {
+      await Course.findByIdAndUpdate(course, { 
+        $addToSet: { enrolledStudents: { $each: students.map(s => ({ student: s, enrolledDate: new Date() })) } } 
+      });
+    }
   } catch (error) {
     res.status(500).json({
       msg: "Server error",
@@ -161,6 +168,11 @@ export const enrollStudent = async (req, res) => {
         }
 
         await student.save();
+        
+        // Sync to Course.enrolledStudents
+        await Course.findByIdAndUpdate(batch.course, {
+            $addToSet: { enrolledStudents: { student: studentId, enrolledDate: new Date() } }
+        });
 
         res.json({ msg: "Student enrolled successfully", batch });
     } catch (error) {
@@ -346,6 +358,17 @@ export const updateBatch = async (req, res) => {
     });
 
     await batch.save();
+
+    // Sync students to Course if changed
+    if (updates.students) {
+      await Course.findByIdAndUpdate(batch.course, {
+        $addToSet: { 
+          enrolledStudents: { 
+            $each: updates.students.map(s => ({ student: s, enrolledDate: new Date() })) 
+          } 
+        }
+      });
+    }
 
     res.json({
       msg: "Batch updated successfully",

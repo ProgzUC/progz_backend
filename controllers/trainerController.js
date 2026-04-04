@@ -59,6 +59,8 @@ export const trainerBootstrap = async (req, res) => {
           studentsCount: batch.students?.length || 0,
           timing: timingStr,
           startDate: batch.startDate,
+          endDate: batch.endDate,
+          status: batch.status,
           meetLink: batch.meetLink,
           completionPercentage,
           trainerAssignment: trainerAssign
@@ -91,7 +93,8 @@ export const trainerBootstrap = async (req, res) => {
           batchName: batch.name,
           courseName: course.courseName,
           startDate: batch.startDate,
-          endDate: batch.endDate
+          endDate: batch.endDate,
+          status: batch.status
         });
       }
     });
@@ -177,23 +180,57 @@ export const getTrainerBatchDetails = async (req, res) => {
 };
 
 export const getTrainerCourses = async (req, res) => {
-  const trainerId = req.user.id;
+  try {
+    const trainerId = req.user.id;
 
-  const courses = await Course.find({
-    instructor: trainerId,
-  })
-    .select("courseName modules enrolledStudents thumbnail")
-    .lean();
+    // Find all courses where this trainer is an instructor
+    const courses = await Course.find({
+      instructor: trainerId,
+    })
+      .select("courseName modules enrolledStudents thumbnail")
+      .lean();
 
-  res.json(
-    courses.map(c => ({
-      courseId: c._id,
-      courseName: c.courseName,
-      thumbnail: c.thumbnail,
-      totalStudents: c.enrolledStudents.length,
-      totalSections: c.modules.reduce((acc, m) => acc + (m.sections?.length || 0), 0),
-    }))
-  );
+    if (!courses.length) {
+      return res.json([]);
+    }
+
+    const courseIds = courses.map((c) => c._id);
+
+    // Fetch batches for these courses to get "real-time" unique student enrollment
+    const batches = await Batch.find({
+      course: { $in: courseIds },
+    })
+      .select("course students")
+      .lean();
+
+    // Map courseId to unique students across all its batches
+    const studentMap = {};
+    batches.forEach((b) => {
+      const cid = b.course.toString();
+      if (!studentMap[cid]) studentMap[cid] = new Set();
+      (b.students || []).forEach((sid) => studentMap[cid].add(sid.toString()));
+    });
+
+    const response = courses.map((c) => {
+      const courseIdStr = c._id.toString();
+      // Use set size if available, otherwise fallback to enrolledStudents.length or 0
+      const batchStudentCount = studentMap[courseIdStr]?.size || 0;
+      const staticEnrolledCount = c.enrolledStudents?.length || 0;
+
+      return {
+        courseId: c._id,
+        courseName: c.courseName,
+        thumbnail: c.thumbnail,
+        totalStudents: Math.max(batchStudentCount, staticEnrolledCount),
+        totalSections: c.modules.reduce((acc, m) => acc + (m.sections?.length || 0), 0),
+      };
+    });
+
+    res.json(response);
+  } catch (err) {
+    console.error("getTrainerCourses error:", err);
+    res.status(500).json({ message: "Failed to fetch trainer courses" });
+  }
 };
 
 export const getTrainerprofile = async (req, res) => {
