@@ -1,6 +1,7 @@
 import RecycleBin from "../models/RecycleBin.js";
 import Course from "../models/Course.js";
 import User from "../models/User.js";
+import Batch from "../models/Batch.js";
 
 // @desc    Get all items in recycle bin
 // @route   GET /api/bin
@@ -44,6 +45,12 @@ export const restoreItem = async (req, res) => {
                 return res.status(400).json({ message: "ID conflict: Item with this ID already exists in active users." });
             }
             await User.create(data);
+        } else if (itemType === "Batch") {
+            const existing = await Batch.findById(data._id);
+            if (existing) {
+                return res.status(400).json({ message: "ID conflict: Item with this ID already exists in active batches." });
+            }
+            await Batch.create(data);
         } else {
             return res.status(400).json({ message: "Unknown item type" });
         }

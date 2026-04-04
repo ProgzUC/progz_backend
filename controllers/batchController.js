@@ -1,6 +1,7 @@
 import Batch from "../models/Batch.js";
 import Course from "../models/Course.js";
 import User from "../models/User.js";
+import RecycleBin from "../models/RecycleBin.js";
 
 export const createBatch = async (req, res) => {
   try {
@@ -296,9 +297,18 @@ export const deleteBatch = async (req, res) => {
 
     // Optionally, you can add checks here to prevent deletion if there are enrolled students, etc.
 
+    // Move to Recycle Bin
+    await RecycleBin.create({
+      itemType: "Batch",
+      originalId: batch._id,
+      data: batch.toObject(),
+      deletedBy: req.user.id,
+      itemRefName: batch.name,
+    });
+
     await Batch.findByIdAndDelete(batchId);
 
-    res.json({ msg: "Batch deleted successfully" });
+    res.json({ msg: "Batch moved to recycle bin" });
   } catch (error) {
     res.status(500).json({ msg: "Server error", error: error.message });
   }

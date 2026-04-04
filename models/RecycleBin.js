@@ -5,7 +5,7 @@ const recycleBinSchema = new mongoose.Schema(
         itemType: {
             type: String,
             required: true,
-            enum: ["Course", "User"],
+            enum: ["Course", "User", "Batch"],
         },
         originalId: {
             type: mongoose.Schema.Types.ObjectId,
