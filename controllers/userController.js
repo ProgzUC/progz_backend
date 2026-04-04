@@ -44,6 +44,58 @@ export const registerUser = async (req, res) => {
     }
 };
 
+// Admin: Directly create an active user without pending request
+export const adminCreateUser = async (req, res) => {
+    try {
+        const { email, password, role } = req.body;
+
+        // Check if user exists in main User collection
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+            return res.status(400).json({ msg: "Email already exists in active users" });
+        }
+
+        // Check if user exists in PendingUser collection
+        const existingPending = await PendingUser.findOne({ email });
+        if (existingPending) {
+            // Remove the pending request since admin is creating them directly now
+            await PendingUser.findByIdAndDelete(existingPending._id);
+        }
+
+        // Hash password
+        let hashedPassword = "";
+        if (password) {
+            hashedPassword = await bcrypt.hash(password, 10);
+        } else {
+            // Provide a default password if not provided by admin
+            hashedPassword = await bcrypt.hash("URBANcode@123", 10);
+        }
+
+        // Extract and map all fields for User model
+        const userData = { ...req.body, role };
+        delete userData.confirmPassword;
+        if (userData.password) {
+            userData.password = hashedPassword;
+        } else {
+            userData.password = hashedPassword;
+        }
+
+        // Save directly to User
+        const newUser = await User.create(userData);
+
+        res.status(201).json({
+            msg: "User created successfully",
+            user: {
+                id: newUser._id,
+                email: newUser.email,
+                role: newUser.role,
+            },
+        });
+    } catch (error) {
+        res.status(500).json({ msg: error.message });
+    }
+};
+
 // Admin: Approve a pending user
 export const approveUser = async (req, res) => {
     try {
