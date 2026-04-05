@@ -1,25 +1,29 @@
-import nodemailer from "nodemailer";
+import SibApiV3Sdk from "@sendinblue/client";
 
 const sendEmail = async (options) => {
-    const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: process.env.SMTP_PORT,
-        secure: false, // true for 465, false for other ports
-        auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS,
-        },
-    });
+    const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
 
-    const message = {
-        from: `${process.env.SMTP_FROM_NAME} <${process.env.SMTP_FROM_EMAIL}>`,
-        to: options.email,
-        subject: options.subject,
-        text: options.message,
-        html: options.html, // Optional: if you want to send HTML emails
+    // Set API key from environment variable
+    apiInstance.setApiKey(
+        SibApiV3Sdk.TransactionalEmailsApiApiKeys.apiKey,
+        process.env.BREVO_API_KEY
+    );
+
+    const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
+
+    sendSmtpEmail.sender = {
+        name: "Progz Support",
+        email: process.env.FROM_EMAIL,
     };
+    sendSmtpEmail.to = [{ email: options.email }];
+    sendSmtpEmail.subject = options.subject;
+    sendSmtpEmail.htmlContent = options.html;
 
-    await transporter.sendMail(message);
+    if (options.message) {
+        sendSmtpEmail.textContent = options.message;
+    }
+
+    await apiInstance.sendTransacEmail(sendSmtpEmail);
 };
 
 export default sendEmail;

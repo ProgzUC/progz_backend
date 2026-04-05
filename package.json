@@ -23,6 +23,7 @@
     "nodemon": "^3.1.11"
   },
   "dependencies": {
+    "@sendinblue/client": "^3.3.1",
     "axios": "^1.13.2",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.9.0",
