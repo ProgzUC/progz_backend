@@ -15,6 +15,7 @@ const userSchema = new mongoose.Schema(
     profession: String,
     employmentStatus: String,
     experience: String,
+  profileImage: String,
 
     source: { type: String, default: "web" },
     zenCourseName: String,

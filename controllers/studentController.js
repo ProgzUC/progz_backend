@@ -22,6 +22,7 @@ export async function getStudentProfile(req, res) {
             name: user.name,
             email: user.email,
             phone: user.phone || "",
+            profileImage: user.profileImage || "",
             // New fields
             altPhone: user.altPhone || "",
             dob: user.dob || "",
@@ -57,6 +58,7 @@ export async function updateStudentProfile(req, res) {
             phone, location, education, jobTitle,
             altPhone, dob, gender, university, profession,
             employmentStatus, experience, skills
+            , profileImage
         } = req.body;
 
         const updateData = {
@@ -73,6 +75,7 @@ export async function updateStudentProfile(req, res) {
             employmentStatus,
             experience,
             skills
+            , profileImage
         };
 
         // Remove undefined fields
@@ -102,6 +105,7 @@ export async function updateStudentProfile(req, res) {
             employmentStatus: user.employmentStatus,
             experience: user.experience,
             skills: user.skills,
+            profileImage: user.profileImage,
 
             // Legacy responses
             location: user.address,
@@ -134,14 +138,14 @@ export async function changePassword(req, res) {
         }
 
         // Verify current password
-        const isMatch = await compare(currentPassword, user.password);
+        const isMatch = await bcrypt.compare(currentPassword, user.password);
         if (!isMatch) {
             return res.status(401).json({ message: "Current password is incorrect" });
         }
 
         // Hash and update new password
-        const salt = await genSalt(10);
-        user.password = await hash(newPassword, salt);
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(newPassword, salt);
         await user.save();
 
         res.json({ message: "Password changed successfully" });
