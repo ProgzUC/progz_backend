@@ -18,7 +18,9 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon server.js",
     "start": "node server.js",
-    "seed:student": "node scripts/seedDemoStudent.js"
+    "seed:student": "node scripts/seedDemoStudent.js",
+    "seed:trainer": "node scripts/seedDemoTrainer.js",
+    "seed:demo": "node scripts/seedDemoUsers.js"
   },
   "devDependencies": {
     "nodemon": "^3.1.11"
