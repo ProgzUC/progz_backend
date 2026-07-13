@@ -266,21 +266,28 @@ export const updateCourse = async (req, res) => {
     // Allow updating all fields except _id and enrolledStudents (usually handled separately)
     // However, for simplicity allowing top-level fields.
 
-    if (updates.courseName) course.courseName = updates.courseName;
-    if (updates.courseId) course.courseId = updates.courseId;
-    if (updates.courseDescription) course.courseDescription = updates.courseDescription;
-    if (updates.courseDuration) course.courseDuration = updates.courseDuration;
-    if (updates.modules) course.modules = updates.modules;
+    if (updates.courseName !== undefined) course.courseName = updates.courseName;
+    if (updates.courseId !== undefined) course.courseId = updates.courseId;
+    if (updates.courseDescription !== undefined) course.courseDescription = updates.courseDescription;
+    if (updates.courseDuration !== undefined) course.courseDuration = updates.courseDuration;
+    if (updates.modules !== undefined) course.modules = updates.modules;
+    if (updates.thumbnail !== undefined) course.thumbnail = updates.thumbnail;
 
-    // Instructors handled via separate endpoint or here? 
+    // Instructors handled via separate endpoint or here?
     // Requirement said "Edit a course". We'll support generic updates here.
-    if (updates.instructor) course.instructor = updates.instructor;
+    if (updates.instructor !== undefined) course.instructor = updates.instructor;
 
     await course.save();
 
     res.json(course);
   } catch (error) {
     console.error("Error updating course:", error);
+    if (error.name === "ValidationError" || error.name === "CastError") {
+      return res.status(400).json({ message: error.message });
+    }
+    if (error.code === 11000) {
+      return res.status(400).json({ message: "Course ID already in use" });
+    }
     res.status(500).json({ message: "Update failed", error: error.message });
   }
 };
