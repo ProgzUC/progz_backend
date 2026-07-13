@@ -36,6 +36,8 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.0.1",
     "node-cron": "^4.2.1",
-    "nodemailer": "^7.0.13"
+    "nodemailer": "^7.0.13",
+    "swagger-jsdoc": "^6.3.0",
+    "swagger-ui-express": "^5.0.1"
   }
 }
