@@ -77,17 +77,45 @@ export const createBatch = async (req, res) => {
       sectionProgress,
     });
 
+    // Sync enrollments to User.enrolledCourses + Course.enrolledStudents before responding
+    if (students.length > 0) {
+      for (const studentId of students) {
+        const student = await User.findById(studentId);
+        if (!student) continue;
+
+        const existing = student.enrolledCourses.find(
+          (e) => e.course?.toString() === course.toString()
+        );
+        if (existing) {
+          existing.batch = batch._id;
+        } else {
+          student.enrolledCourses.push({
+            course,
+            batch: batch._id,
+            enrolledAt: new Date(),
+          });
+        }
+        await student.save();
+
+        await Course.updateOne(
+          { _id: course, "enrolledStudents.student": { $ne: studentId } },
+          {
+            $push: {
+              enrolledStudents: {
+                student: studentId,
+                enrolledDate: new Date(),
+                batchId: batch._id,
+              },
+            },
+          }
+        );
+      }
+    }
+
     res.status(201).json({
       msg: "Batch created successfully",
       batch,
     });
-    
-    // Background: Update Course enrolledStudents
-    if (students.length > 0) {
-      await Course.findByIdAndUpdate(course, { 
-        $addToSet: { enrolledStudents: { $each: students.map(s => ({ student: s, enrolledDate: new Date() })) } } 
-      });
-    }
   } catch (error) {
     res.status(500).json({
       msg: "Server error",
@@ -168,11 +196,20 @@ export const enrollStudent = async (req, res) => {
         }
 
         await student.save();
-        
-        // Sync to Course.enrolledStudents
-        await Course.findByIdAndUpdate(batch.course, {
-            $addToSet: { enrolledStudents: { student: studentId, enrolledDate: new Date() } }
-        });
+
+        // Sync to Course.enrolledStudents (dedupe by student id)
+        await Course.updateOne(
+            { _id: batch.course, "enrolledStudents.student": { $ne: studentId } },
+            {
+                $push: {
+                    enrolledStudents: {
+                        student: studentId,
+                        enrolledDate: new Date(),
+                        batchId: batch._id,
+                    },
+                },
+            }
+        );
 
         res.json({ msg: "Student enrolled successfully", batch });
     } catch (error) {

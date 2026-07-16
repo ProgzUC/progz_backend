@@ -68,11 +68,12 @@ export const getAllCourses = async (req, res) => {
 
     // Format to include count and exclude full array
     const formattedCourses = courses.map((course) => {
+      const enrolledFromCourse = course.enrolledStudents?.length || 0;
+      const enrolledFromUsers = countMap[course._id.toString()] || 0;
       const { enrolledStudents, ...rest } = course;
       return {
         ...rest,
-        // The single source of truth for enrollments is User.enrolledCourses
-        enrolledCount: countMap[course._id.toString()] || 0,
+        enrolledCount: Math.max(enrolledFromUsers, enrolledFromCourse),
       };
     });
 
