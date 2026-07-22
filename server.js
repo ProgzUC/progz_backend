@@ -23,8 +23,25 @@ dotenv.config();
 connectDB();
 console.log("Environment:", process.env.MONGO_URI);
 
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://progz.urbancode.in",
+  process.env.FRONTEND_URL,
+].filter(Boolean);
+
 const app = express();
-app.use(cors());
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS blocked for origin: ${origin}`));
+      }
+    },
+    credentials: true,
+  })
+);
 app.use(express.json());
 
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
