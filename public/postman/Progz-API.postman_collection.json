@@ -85,7 +85,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Student Name\",\n  \"email\": \"student@example.com\",\n  \"password\": \"min-6-chars\",\n  \"phone\": \"9876543210\",\n  \"dob\": \"2002-01-01\",\n  \"address\": \"Address\",\n  \"role\": \"student\",\n  \"education\": \"B.E\",\n  \"university\": \"University\",\n  \"profession\": \"Student\",\n  \"experience\": \"fresher\",\n  \"employmentStatus\": \"Student\"\n}"
+              "raw": "{\n  \"name\": \"Student Name\",\n  \"email\": \"student@example.com\",\n  \"password\": \"min-8-chars\",\n  \"phone\": \"9876543210\",\n  \"dob\": \"2002-01-01\",\n  \"address\": \"Address\",\n  \"role\": \"student\",\n  \"education\": \"B.E\",\n  \"university\": \"University\",\n  \"profession\": \"Student\",\n  \"experience\": \"fresher\",\n  \"employmentStatus\": \"Student\"\n}"
             },
             "url": "{{baseUrl}}/users/register"
           }

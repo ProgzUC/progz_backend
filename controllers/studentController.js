@@ -2,6 +2,7 @@ import User from "../models/User.js";
 import Course from "../models/Course.js";
 import Batch from "../models/Batch.js";
 import bcrypt from "bcryptjs";
+import { validatePassword } from "../utils/passwordValidation.js";
 
 /**
  * @desc    Get student profile
@@ -130,6 +131,11 @@ export async function changePassword(req, res) {
 
         if (!currentPassword || !newPassword) {
             return res.status(400).json({ message: "All fields are required" });
+        }
+
+        const passwordCheck = validatePassword(newPassword);
+        if (!passwordCheck.ok) {
+            return res.status(400).json({ message: passwordCheck.message });
         }
 
         const user = await User.findById(studentId);

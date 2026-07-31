@@ -8,10 +8,16 @@ import {
   getTokenExpiryConfig,
 } from "../utils/generateTokens.js";
 import sendWithBrevo from "../utils/sendWithBrevo.js";
+import { validatePassword } from "../utils/passwordValidation.js";
 
 export const register = async (req, res) => {
   try {
     const { email, password, role } = req.body;
+
+    const passwordCheck = validatePassword(password);
+    if (!passwordCheck.ok) {
+      return res.status(400).json({ msg: passwordCheck.message });
+    }
 
     const exists = await User.findOne({ email });
     if (exists) return res.status(400).json({ msg: "Email already exists" });
@@ -241,6 +247,11 @@ export const forgotPassword = async (req, res) => {
 export const resetPassword = async (req, res) => {
   const { token } = req.params;
   const { password } = req.body;
+
+  const passwordCheck = validatePassword(password);
+  if (!passwordCheck.ok) {
+    return res.status(400).json({ msg: passwordCheck.message });
+  }
 
   const hashedToken = crypto
     .createHash("sha256")

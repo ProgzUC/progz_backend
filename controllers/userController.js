@@ -2,11 +2,17 @@ import User from "../models/User.js";
 import PendingUser from "../models/PendingUser.js";
 import RecycleBin from "../models/RecycleBin.js";
 import bcrypt from "bcryptjs";
+import { validatePassword } from "../utils/passwordValidation.js";
 
 // Register a new user (Add to PendingUser)
 export const registerUser = async (req, res) => {
     try {
         const { email, password, role } = req.body;
+
+        const passwordCheck = validatePassword(password);
+        if (!passwordCheck.ok) {
+            return res.status(400).json({ msg: passwordCheck.message });
+        }
 
         // Check if user exists in main User collection
         const existingUser = await User.findOne({ email });
@@ -65,6 +71,10 @@ export const adminCreateUser = async (req, res) => {
         // Hash password
         let hashedPassword = "";
         if (password) {
+            const passwordCheck = validatePassword(password);
+            if (!passwordCheck.ok) {
+                return res.status(400).json({ msg: passwordCheck.message });
+            }
             hashedPassword = await bcrypt.hash(password, 10);
         } else {
             // Provide a default password if not provided by admin

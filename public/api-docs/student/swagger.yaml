@@ -54,7 +54,7 @@ components:
       properties:
         name: { type: string, example: Priya Sharma }
         email: { type: string, format: email, example: priya@example.com }
-        password: { type: string, minLength: 6, writeOnly: true }
+        password: { type: string, minLength: 8, writeOnly: true }
         phone: { type: string, example: "9876543210" }
         altPhone: { type: string, example: "9123456780" }
         dob: { type: string, format: date, example: "2002-08-10" }
@@ -88,7 +88,7 @@ components:
       required: [currentPassword, newPassword]
       properties:
         currentPassword: { type: string, format: password, writeOnly: true }
-        newPassword: { type: string, format: password, writeOnly: true }
+        newPassword: { type: string, format: password, writeOnly: true, minLength: 8 }
 
 security:
   - bearerAuth: []

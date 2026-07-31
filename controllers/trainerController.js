@@ -3,6 +3,7 @@ import Course from "../models/Course.js";
 import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 import { getNextClassDate } from "../utils/getNextClassDate.js";
+import { validatePassword } from "../utils/passwordValidation.js";
 
 export const trainerBootstrap = async (req, res) => {
   try {
@@ -270,6 +271,10 @@ export const updateTrainerprofile = async (req, res) => {
 
     // If password is being updated, hash it
     if (updates.password) {
+      const passwordCheck = validatePassword(updates.password);
+      if (!passwordCheck.ok) {
+        return res.status(400).json({ message: passwordCheck.message });
+      }
       const salt = await bcrypt.genSalt(10);
       updates.password = await bcrypt.hash(updates.password, salt);
     }

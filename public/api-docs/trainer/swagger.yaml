@@ -55,7 +55,7 @@ components:
       properties:
         name: { type: string, example: Raj Kumar }
         email: { type: string, format: email, example: raj@example.com }
-        password: { type: string, minLength: 6, writeOnly: true }
+        password: { type: string, minLength: 8, writeOnly: true }
         phone: { type: string, example: "9876543210" }
         altPhone: { type: string, example: "9123456780" }
         dob: { type: string, format: date, example: "1990-05-20" }
