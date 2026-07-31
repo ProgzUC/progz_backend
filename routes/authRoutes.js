@@ -1,5 +1,11 @@
 import express from "express";
-import { register, login, forgotPassword, resetPassword } from "../controllers/authController.js";
+import {
+  register,
+  login,
+  refreshAccessToken,
+  forgotPassword,
+  resetPassword,
+} from "../controllers/authController.js";
 import { protect, authorizeRoles } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
@@ -39,6 +45,20 @@ const router = express.Router();
 
 /**
  * @swagger
+ * /auth/refresh:
+ *   post:
+ *     summary: Exchange a refresh token for a new access token
+ *     tags: [Auth]
+ *     security: []
+ *     responses:
+ *       200:
+ *         description: New access token issued
+ *       401:
+ *         description: Invalid or expired refresh token
+ */
+
+/**
+ * @swagger
  * /auth/forgot-password:
  *   post:
  *     summary: Request a password reset email
@@ -70,6 +90,7 @@ const router = express.Router();
 // PUBLIC ROUTES
 router.post("/register", register);
 router.post("/login", login);
+router.post("/refresh", refreshAccessToken);
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password/:token", resetPassword);
 

@@ -1,7 +1,12 @@
 import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import { generateAccessToken, generateRefreshToken } from "../utils/generateTokens.js";
+import jwt from "jsonwebtoken";
+import {
+  generateAccessToken,
+  generateRefreshToken,
+  getTokenExpiryConfig,
+} from "../utils/generateTokens.js";
 import sendWithBrevo from "../utils/sendWithBrevo.js";
 
 export const register = async (req, res) => {
@@ -41,12 +46,15 @@ export const login = async (req, res) => {
 
     const accessToken = generateAccessToken(user);
     const refreshToken = generateRefreshToken(user);
+    const expiry = getTokenExpiryConfig();
 
     res.json({
       msg: "Login successful",
       role: user.role,
       accessToken,
       refreshToken,
+      expiresIn: expiry.accessTokenExpiresIn,
+      refreshExpiresIn: expiry.refreshTokenExpiresIn,
       user: {
         id: user._id,
         name: user.name,
@@ -60,7 +68,43 @@ export const login = async (req, res) => {
   }
 };
 
+export const refreshAccessToken = async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken) {
+      return res.status(401).json({ msg: "Refresh token required" });
+    }
 
+    let decoded;
+    try {
+      decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+    } catch {
+      return res.status(401).json({ msg: "Invalid or expired refresh token" });
+    }
+
+    const user = await User.findById(decoded.id);
+    if (!user) {
+      return res.status(401).json({ msg: "User not found" });
+    }
+
+    const accessToken = generateAccessToken(user);
+    const expiry = getTokenExpiryConfig();
+
+    res.json({
+      msg: "Token refreshed",
+      accessToken,
+      expiresIn: expiry.accessTokenExpiresIn,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ msg: error.message });
+  }
+};
 
 export const forgotPassword = async (req, res) => {
   const { email } = req.body;
