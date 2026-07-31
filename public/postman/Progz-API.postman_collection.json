@@ -1,0 +1,130 @@
+{
+  "info": {
+    "name": "Progz API",
+    "description": "Progz LMS API collection.\n\n**Auth (not cookies):** This API uses Bearer JWT. Run **Auth → Login** first — the token is saved automatically to `accessToken` (hidden/secret variable).\n\nAll other requests use `Authorization: Bearer {{accessToken}}`.\n\nImport **Progz Local** or **Progz Production** environment for `baseUrl`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://progz-backend.onrender.com/api" },
+    { "key": "accessToken", "value": "", "type": "secret" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const data = pm.response.json();",
+                  "  if (data.accessToken) {",
+                  "    pm.collectionVariables.set('accessToken', data.accessToken);",
+                  "    if (pm.environment.name) pm.environment.set('accessToken', data.accessToken);",
+                  "    pm.test('Token saved to accessToken (hidden)', () => true);",
+                  "  } else {",
+                  "    pm.test('Login response missing accessToken', () => false);",
+                  "  }",
+                  "} else {",
+                  "  pm.test('Login failed', () => false);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"your@email.com\",\n  \"password\": \"your-password\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"your@email.com\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/forgot-password"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Student",
+      "item": [
+        {
+          "name": "Get Profile",
+          "request": { "method": "GET", "url": "{{baseUrl}}/student/profile" }
+        },
+        {
+          "name": "My Courses",
+          "request": { "method": "GET", "url": "{{baseUrl}}/student/my-courses" }
+        },
+        {
+          "name": "Register (Student)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Student Name\",\n  \"email\": \"student@example.com\",\n  \"password\": \"min-6-chars\",\n  \"phone\": \"9876543210\",\n  \"dob\": \"2002-01-01\",\n  \"address\": \"Address\",\n  \"role\": \"student\",\n  \"education\": \"B.E\",\n  \"university\": \"University\",\n  \"profession\": \"Student\",\n  \"experience\": \"fresher\",\n  \"employmentStatus\": \"Student\"\n}"
+            },
+            "url": "{{baseUrl}}/users/register"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Trainer",
+      "item": [
+        {
+          "name": "Get Profile",
+          "request": { "method": "GET", "url": "{{baseUrl}}/trainer/profile" }
+        },
+        {
+          "name": "My Courses",
+          "request": { "method": "GET", "url": "{{baseUrl}}/trainer/courses" }
+        },
+        {
+          "name": "My Batches",
+          "request": { "method": "GET", "url": "{{baseUrl}}/trainer/batches" }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Dashboard Stats",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/stats" }
+        },
+        {
+          "name": "Pending Users",
+          "request": { "method": "GET", "url": "{{baseUrl}}/users/pending" }
+        },
+        {
+          "name": "All Users",
+          "request": { "method": "GET", "url": "{{baseUrl}}/users/allUsers" }
+        }
+      ]
+    }
+  ]
+}

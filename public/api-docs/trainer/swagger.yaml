@@ -1,0 +1,365 @@
+openapi: 3.0.3
+info:
+  title: Progz API — Trainer
+  description: |
+    Trainer-only API documentation for Progz platform.
+
+    **Auth:** Use `POST /auth/login` — token auto-saves in Swagger UI / Postman (Bearer JWT, not cookies).
+
+    **Register:** `POST /users/register` with `"role": "trainer"` only.
+  version: 1.0.0
+
+servers:
+  - url: https://progz-backend.onrender.com/api
+    description: Production (Live)
+  - url: http://localhost:5002/api
+    description: Local development
+
+tags:
+  - name: Auth
+  - name: Registration
+  - name: Trainer
+  - name: Courses
+  - name: Class Session
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        message: { type: string }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, example: trainer@progz.com }
+        password: { type: string, format: password, writeOnly: true }
+
+    LoginResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: JWT access token (auto-saved in Swagger UI / Postman)
+
+    RegisterTrainerRequest:
+      type: object
+      required: [name, email, password, phone, dob, address, role, education, university, profession, experience, employmentStatus]
+      properties:
+        name: { type: string, example: Raj Kumar }
+        email: { type: string, format: email, example: raj@example.com }
+        password: { type: string, minLength: 6, writeOnly: true }
+        phone: { type: string, example: "9876543210" }
+        altPhone: { type: string, example: "9123456780" }
+        dob: { type: string, format: date, example: "1990-05-20" }
+        address: { type: string, example: "45 Trainer Street, Chennai" }
+        role:
+          type: string
+          enum: [trainer]
+          example: trainer
+        education: { type: string, example: M.Tech Computer Science }
+        university: { type: string, example: IIT Madras }
+        profession: { type: string, example: Senior Developer }
+        experience: { type: string, enum: [fresher, "1-3", "3-5", "5+"], example: "5+" }
+        employmentStatus: { type: string, example: Employed }
+        skills: { type: string, example: React, Node.js, MongoDB }
+
+    User:
+      type: object
+      properties:
+        _id: { type: string }
+        name: { type: string }
+        email: { type: string }
+        role: { type: string, enum: [trainer] }
+
+    TrainerSectionCompleteRequest:
+      type: object
+      required: [batchId, moduleIndex, sectionIndex]
+      properties:
+        batchId: { type: string }
+        moduleIndex: { type: integer }
+        sectionIndex: { type: integer }
+
+    StartClassRequest:
+      type: object
+      required: [batchId]
+      properties:
+        batchId: { type: string }
+
+    MarkAttendanceRequest:
+      type: object
+      required: [attendance]
+      properties:
+        attendance:
+          type: array
+          items:
+            type: object
+            required: [studentId, status]
+            properties:
+              studentId: { type: string }
+              status: { type: string, enum: [Present, Late, Absent] }
+
+    EndClassRequest:
+      type: object
+      properties:
+        notes: { type: string }
+
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Trainer login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LoginResponse" }
+        "401": { description: Invalid credentials }
+
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Forgot password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        "200": { description: Reset email sent }
+
+  /users/register:
+    post:
+      tags: [Registration]
+      summary: Register as Trainer (pending approval)
+      description: Creates a trainer registration request. Admin must approve before login.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterTrainerRequest" }
+            example:
+              name: Raj Kumar
+              email: raj@example.com
+              phone: "9876543210"
+              dob: "1990-05-20"
+              address: "45 Trainer Street, Chennai"
+              role: trainer
+              education: M.Tech Computer Science
+              university: IIT Madras
+              profession: Senior Developer
+              experience: "5+"
+              employmentStatus: Employed
+              skills: React, Node.js, MongoDB
+      responses:
+        "201": { description: Trainer registration request created }
+        "400": { description: Validation error }
+
+  /trainer/trainer-summary:
+    get:
+      tags: [Trainer]
+      summary: Trainer dashboard summary
+      responses:
+        "200": { description: Batches overview }
+
+  /trainer/trainer-batch-details/{batchId}:
+    get:
+      tags: [Trainer]
+      summary: Batch details with modules & sections
+      parameters:
+        - name: batchId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Batch details }
+
+  /trainer/trainer-section-complete:
+    post:
+      tags: [Trainer]
+      summary: Mark section as complete
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TrainerSectionCompleteRequest" }
+      responses:
+        "200": { description: Section updated }
+
+  /trainer/trainer-profile:
+    get:
+      tags: [Trainer]
+      summary: Get trainer profile
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+    put:
+      tags: [Trainer]
+      summary: Update trainer profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/User" }
+      responses:
+        "200": { description: Profile updated }
+
+  /trainer/trainer-courses:
+    get:
+      tags: [Trainer]
+      summary: List assigned courses
+      responses:
+        "200": { description: Trainer courses }
+
+  /courses:
+    get:
+      tags: [Courses]
+      summary: List courses
+      responses:
+        "200": { description: Course list }
+    post:
+      tags: [Courses]
+      summary: Create a course
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [courseName, courseId, courseDescription, courseDuration]
+              properties:
+                courseName: { type: string }
+                courseId: { type: string }
+                courseDescription: { type: string }
+                courseDuration: { type: number }
+                modules: { type: array, items: { type: object } }
+      responses:
+        "201": { description: Course created }
+
+  /courses/{courseId}:
+    get:
+      tags: [Courses]
+      summary: Get course by ID
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Course details }
+    put:
+      tags: [Courses]
+      summary: Update course
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200": { description: Course updated }
+
+  /class-session/start:
+    post:
+      tags: [Class Session]
+      summary: Start live class
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StartClassRequest" }
+      responses:
+        "201": { description: Session started }
+
+  /class-session/{sessionId}/attendance:
+    patch:
+      tags: [Class Session]
+      summary: Mark attendance
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MarkAttendanceRequest" }
+      responses:
+        "200": { description: Attendance saved }
+
+  /class-session/{sessionId}/end:
+    patch:
+      tags: [Class Session]
+      summary: End class session
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EndClassRequest" }
+      responses:
+        "200": { description: Session ended }
+
+  /class-session/batch/{batchId}:
+    get:
+      tags: [Class Session]
+      summary: List sessions for batch
+      parameters:
+        - name: batchId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: startDate
+          in: query
+          schema: { type: string, format: date }
+        - name: endDate
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200": { description: Session list }
+
+  /class-session/batch/{batchId}/report:
+    get:
+      tags: [Class Session]
+      summary: Attendance report for batch
+      parameters:
+        - name: batchId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Attendance report }

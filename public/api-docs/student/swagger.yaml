@@ -1,0 +1,214 @@
+openapi: 3.0.3
+info:
+  title: Progz API — Student
+  description: |
+    Student-only API documentation for Progz platform.
+
+    **Auth:** Use `POST /auth/login` — token auto-saves in Swagger UI / Postman (Bearer JWT, not cookies).
+
+    **Register:** `POST /users/register` with `"role": "student"` only.
+  version: 1.0.0
+
+servers:
+  - url: https://progz-backend.onrender.com/api
+    description: Production (Live)
+  - url: http://localhost:5002/api
+    description: Local development
+
+tags:
+  - name: Auth
+  - name: Registration
+  - name: Student
+  - name: Attendance
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        message: { type: string }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, example: student@progz.com }
+        password: { type: string, format: password, writeOnly: true }
+
+    LoginResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: JWT access token (auto-saved in Swagger UI / Postman)
+
+    RegisterStudentRequest:
+      type: object
+      required: [name, email, password, phone, dob, address, role, education, university, profession, experience, employmentStatus]
+      properties:
+        name: { type: string, example: Priya Sharma }
+        email: { type: string, format: email, example: priya@example.com }
+        password: { type: string, minLength: 6, writeOnly: true }
+        phone: { type: string, example: "9876543210" }
+        altPhone: { type: string, example: "9123456780" }
+        dob: { type: string, format: date, example: "2002-08-10" }
+        address: { type: string, example: "12 Student Colony, Coimbatore" }
+        role:
+          type: string
+          enum: [student]
+          example: student
+        education: { type: string, example: B.E Computer Science }
+        university: { type: string, example: Anna University }
+        profession: { type: string, example: Student }
+        experience: { type: string, enum: [fresher, "1-3", "3-5", "5+"], example: fresher }
+        employmentStatus: { type: string, example: Student }
+
+    StudentProfileUpdate:
+      type: object
+      properties:
+        location: { type: string }
+        education: { type: string }
+        jobTitle: { type: string }
+        dob: { type: string }
+        gender: { type: string }
+        university: { type: string }
+        experience: { type: string }
+        employmentStatus: { type: string }
+        skills: { type: string }
+        profileImage: { type: string }
+
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { type: string, format: password, writeOnly: true }
+        newPassword: { type: string, format: password, writeOnly: true }
+
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Student login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LoginResponse" }
+        "401": { description: Invalid credentials }
+
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Forgot password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        "200": { description: Reset email sent }
+
+  /users/register:
+    post:
+      tags: [Registration]
+      summary: Register as Student (pending approval)
+      description: Creates a student registration request. Admin must approve before login.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterStudentRequest" }
+            example:
+              name: Priya Sharma
+              email: priya@example.com
+              phone: "9876543210"
+              dob: "2002-08-10"
+              address: "12 Student Colony, Coimbatore"
+              role: student
+              education: B.E Computer Science
+              university: Anna University
+              profession: Student
+              experience: fresher
+              employmentStatus: Student
+      responses:
+        "201": { description: Student registration request created }
+        "400": { description: Validation error }
+
+  /student/profile:
+    get:
+      tags: [Student]
+      summary: Get student profile
+      responses:
+        "200": { description: Profile data }
+    put:
+      tags: [Student]
+      summary: Update student profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StudentProfileUpdate" }
+      responses:
+        "200": { description: Profile updated }
+
+  /student/change-password:
+    post:
+      tags: [Student]
+      summary: Change password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChangePasswordRequest" }
+      responses:
+        "200": { description: Password changed }
+        "400": { description: Wrong current password }
+
+  /student/my-courses:
+    get:
+      tags: [Student]
+      summary: List enrolled courses
+      responses:
+        "200": { description: Enrolled courses with batches }
+
+  /student/course/{courseId}/progress:
+    get:
+      tags: [Student]
+      summary: Get course progress
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Progress data }
+        "404": { description: Course not found }
+
+  /class-session/student/me:
+    get:
+      tags: [Attendance]
+      summary: My attendance history
+      responses:
+        "200": { description: Attendance records for logged-in student }

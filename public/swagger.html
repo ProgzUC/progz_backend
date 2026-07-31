@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Progz API Docs</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css" />
+  <style>
+    html { box-sizing: border-box; overflow-y: scroll; }
+    *, *:before, *:after { box-sizing: inherit; }
+    body { margin: 0; background: #fafafa; }
+    .topbar { display: none; }
+  </style>
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <div style="padding:10px 20px;background:#14532d;color:#fff;font-family:system-ui;font-size:14px;">
+    Role-based docs:
+    <a href="/api-docs/trainer/" style="color:#86efac;margin-left:8px;">Trainer</a> ·
+    <a href="/api-docs/student/" style="color:#93c5fd;">Student</a> ·
+    <a href="/api-docs/admin/" style="color:#fcd34d;">Admin</a>
+  </div>
+  <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js"></script>
+  <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-standalone-preset.js"></script>
+  <script src="/api-docs/swagger-init.js"></script>
+  <script>window.onload = () => initProgzSwagger("/swagger.yaml");</script>
+</body>
+</html>

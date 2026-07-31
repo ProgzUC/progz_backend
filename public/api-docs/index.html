@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Progz API Docs</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, sans-serif;
+      background: linear-gradient(135deg, #0f172a, #14532d);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      background: #fff;
+      color: #111;
+      border-radius: 16px;
+      padding: 32px;
+      max-width: 480px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0,0,0,.3);
+    }
+    h1 { margin: 0 0 8px; font-size: 24px; }
+    p { margin: 0 0 24px; color: #64748b; line-height: 1.5; }
+    .links { display: flex; flex-direction: column; gap: 12px; }
+    a {
+      display: block;
+      padding: 14px 18px;
+      border-radius: 10px;
+      text-decoration: none;
+      font-weight: 600;
+      text-align: center;
+      transition: transform .15s, box-shadow .15s;
+    }
+    a:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,0,0,.12); }
+    .trainer { background: #dcfce7; color: #14532d; border: 2px solid #86efac; }
+    .student { background: #dbeafe; color: #1e3a8a; border: 2px solid #93c5fd; }
+    .admin { background: #fef3c7; color: #92400e; border: 2px solid #fcd34d; }
+    .all { background: #f1f5f9; color: #334155; border: 2px solid #cbd5e1; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Progz API Documentation</h1>
+    <p>Choose your role to view only the relevant API endpoints. Login token auto-saves (Bearer JWT — not cookies). Sensitive data is hidden in responses.</p>
+    <div class="links">
+      <a class="trainer" href="/api-docs/trainer/">Trainer APIs</a>
+      <a class="student" href="/api-docs/student/">Student APIs</a>
+      <a class="admin" href="/api-docs/admin/">Admin APIs</a>
+      <a class="all" href="/api-docs-generated/">All APIs (Generated)</a>
+    </div>
+  </div>
+</body>
+</html>

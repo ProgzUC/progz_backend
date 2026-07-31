@@ -1,0 +1,1444 @@
+openapi: 3.0.3
+info:
+  title: Progz API
+  description: |
+    REST API for the Progz learning platform (Admin, Trainer, Student).
+
+    **Auth:** Most endpoints require a Bearer JWT in the `Authorization` header.
+    Obtain a token via `POST /auth/login` — token auto-saves in Swagger UI / Postman (not cookies).
+  version: 1.0.0
+  contact:
+    name: Progz / Urbancode
+
+servers:
+  - url: https://progz-backend.onrender.com/api
+    description: Production (Live)
+  - url: http://localhost:5002/api
+    description: Local development
+
+tags:
+  - name: Auth
+    description: Authentication and password reset
+  - name: Users
+    description: User registration, approval, and admin user management
+  - name: Courses
+    description: Course CRUD, versions, and rollback
+  - name: Batches
+    description: Batch management and student enrollment
+  - name: Admin
+    description: Admin dashboard and analytics
+  - name: Trainer
+    description: Trainer profile, courses, batches, and section completion
+  - name: Student
+    description: Student profile, courses, and progress
+  - name: Class Session
+    description: Live class sessions and attendance
+  - name: Sync
+    description: Manual data sync
+  - name: Recycle Bin
+    description: Soft-deleted items restore / permanent delete
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token from login
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+        msg:
+          type: string
+        error:
+          type: string
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: admin@progz.com
+        password:
+          type: string
+          format: password
+          writeOnly: true
+
+    LoginResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: JWT access token (auto-saved in Swagger UI / Postman)
+
+    ForgotPasswordRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+
+    ResetPasswordRequest:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+          format: password
+          writeOnly: true
+
+    User:
+      type: object
+      properties:
+        _id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        altPhone:
+          type: string
+        dob:
+          type: string
+          format: date
+        address:
+          type: string
+        role:
+          type: string
+          enum: [student, trainer, admin]
+        education:
+          type: string
+        university:
+          type: string
+        profession:
+          type: string
+        experience:
+          type: string
+        employmentStatus:
+          type: string
+        skills:
+          type: string
+        profileImage:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    RegisterUserRequest:
+      type: object
+      required:
+        - name
+        - email
+        - password
+        - phone
+        - dob
+        - address
+        - role
+        - education
+        - university
+        - profession
+        - experience
+        - employmentStatus
+      properties:
+        name:
+          type: string
+          example: John Doe
+        email:
+          type: string
+          format: email
+          example: john@example.com
+        password:
+          type: string
+          format: password
+          writeOnly: true
+          minLength: 6
+        phone:
+          type: string
+          pattern: "^\\d{10}$"
+          example: "9876543210"
+        altPhone:
+          type: string
+          description: Optional alternate phone (10 digits)
+          example: "9123456780"
+        dob:
+          type: string
+          format: date
+          example: "2000-01-15"
+        address:
+          type: string
+          minLength: 10
+          example: "123 Main Street, Chennai, Tamil Nadu"
+        role:
+          type: string
+          enum: [student, trainer]
+          example: student
+        education:
+          type: string
+          example: B.E Computer Science
+        university:
+          type: string
+          example: Anna University
+        profession:
+          type: string
+          example: Software Developer
+        experience:
+          type: string
+          enum: [fresher, "1-3", "3-5", "5+"]
+          example: fresher
+        employmentStatus:
+          type: string
+          example: Employed
+        skills:
+          type: string
+          description: Optional — used for admin-created users
+          example: JavaScript, React, Node.js
+      example:
+        name: John Doe
+        email: john@example.com
+        phone: "9876543210"
+        altPhone: "9123456780"
+        dob: "2000-01-15"
+        address: "123 Main Street, Chennai, Tamil Nadu"
+        role: student
+        education: B.E Computer Science
+        university: Anna University
+        profession: Software Developer
+        experience: fresher
+        employmentStatus: Employed
+
+    CloudinaryFile:
+      type: object
+      properties:
+        url:
+          type: string
+        publicId:
+          type: string
+        fileType:
+          type: string
+        originalName:
+          type: string
+
+    CourseSection:
+      type: object
+      properties:
+        sectionName:
+          type: string
+        learningMaterialNotes:
+          type: string
+          description: HTML from rich text editor
+        learningMaterialFile:
+          type: array
+          items:
+            $ref: "#/components/schemas/CloudinaryFile"
+        codeChallengeInstructions:
+          type: string
+          description: HTML from rich text editor
+        codeChallengeFile:
+          type: array
+          items:
+            $ref: "#/components/schemas/CloudinaryFile"
+        videoReferences:
+          type: array
+          items:
+            type: string
+            description: YouTube URL or video reference
+
+    CourseModule:
+      type: object
+      properties:
+        title:
+          type: string
+        sections:
+          type: array
+          items:
+            $ref: "#/components/schemas/CourseSection"
+
+    Course:
+      type: object
+      properties:
+        _id:
+          type: string
+        courseName:
+          type: string
+        courseId:
+          type: string
+        courseDescription:
+          type: string
+        courseDuration:
+          type: number
+          description: Duration in hours or days
+        thumbnail:
+          oneOf:
+            - $ref: "#/components/schemas/CloudinaryFile"
+            - type: "null"
+        instructor:
+          type: array
+          items:
+            type: string
+          description: Trainer user IDs
+        modules:
+          type: array
+          items:
+            $ref: "#/components/schemas/CourseModule"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CourseRequest:
+      type: object
+      required: [courseName, courseId, courseDescription, courseDuration]
+      properties:
+        courseName:
+          type: string
+        courseId:
+          type: string
+        courseDescription:
+          type: string
+        courseDuration:
+          type: number
+        thumbnail:
+          $ref: "#/components/schemas/CloudinaryFile"
+        instructor:
+          type: array
+          items:
+            type: string
+        modules:
+          type: array
+          items:
+            $ref: "#/components/schemas/CourseModule"
+
+    ClassTiming:
+      type: object
+      properties:
+        startTime:
+          type: string
+          example: "10:00"
+        endTime:
+          type: string
+          example: "12:00"
+        timezone:
+          type: string
+          example: Asia/Kolkata
+
+    BatchTrainerAssignment:
+      type: object
+      properties:
+        trainer:
+          type: string
+          description: Trainer user ID
+        assignedModules:
+          type: array
+          items:
+            type: integer
+        fromDate:
+          type: string
+          format: date
+        toDate:
+          type: string
+          format: date
+        isCurrent:
+          type: boolean
+
+    Batch:
+      type: object
+      properties:
+        _id:
+          type: string
+        name:
+          type: string
+        course:
+          type: string
+          description: Course ID
+        daysOfWeek:
+          type: array
+          items:
+            type: string
+          example: [Monday, Wednesday, Friday]
+        classTiming:
+          $ref: "#/components/schemas/ClassTiming"
+        meetLink:
+          type: string
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [upcoming, ongoing, completed, cancelled]
+        trainers:
+          type: array
+          items:
+            $ref: "#/components/schemas/BatchTrainerAssignment"
+        students:
+          type: array
+          items:
+            type: string
+
+    BatchRequest:
+      type: object
+      required: [name, course]
+      properties:
+        name:
+          type: string
+        course:
+          type: string
+        daysOfWeek:
+          type: array
+          items:
+            type: string
+        classTiming:
+          $ref: "#/components/schemas/ClassTiming"
+        meetLink:
+          type: string
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        status:
+          type: string
+        trainers:
+          type: array
+          items:
+            $ref: "#/components/schemas/BatchTrainerAssignment"
+
+    EnrollStudentRequest:
+      type: object
+      required: [studentId]
+      properties:
+        studentId:
+          type: string
+        instructorId:
+          type: string
+
+    RemoveStudentRequest:
+      type: object
+      required: [studentId]
+      properties:
+        studentId:
+          type: string
+
+    TrainerSectionCompleteRequest:
+      type: object
+      required: [batchId, moduleIndex, sectionIndex]
+      properties:
+        batchId:
+          type: string
+        moduleIndex:
+          type: integer
+        sectionIndex:
+          type: integer
+
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+          format: password
+        newPassword:
+          type: string
+          format: password
+
+    StudentProfileUpdate:
+      type: object
+      properties:
+        location:
+          type: string
+        education:
+          type: string
+        jobTitle:
+          type: string
+        dob:
+          type: string
+        gender:
+          type: string
+        university:
+          type: string
+        experience:
+          type: string
+        employmentStatus:
+          type: string
+        skills:
+          type: string
+        zenCourseName:
+          type: string
+        zenCourseType:
+          type: string
+        source:
+          type: string
+        profileImage:
+          type: string
+
+    AttendanceEntry:
+      type: object
+      required: [studentId, status]
+      properties:
+        studentId:
+          type: string
+        status:
+          type: string
+          enum: [Present, Late, Absent]
+
+    MarkAttendanceRequest:
+      type: object
+      required: [attendance]
+      properties:
+        attendance:
+          type: array
+          items:
+            $ref: "#/components/schemas/AttendanceEntry"
+
+    EndClassRequest:
+      type: object
+      properties:
+        notes:
+          type: string
+
+    StartClassRequest:
+      type: object
+      required: [batchId]
+      properties:
+        batchId:
+          type: string
+
+    ClassSession:
+      type: object
+      properties:
+        _id:
+          type: string
+        batchId:
+          type: string
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        notes:
+          type: string
+        attendance:
+          type: array
+          items:
+            $ref: "#/components/schemas/AttendanceEntry"
+        status:
+          type: string
+          enum: [active, ended]
+
+    BinItem:
+      type: object
+      properties:
+        _id:
+          type: string
+        resourceType:
+          type: string
+        data:
+          type: object
+        deletedAt:
+          type: string
+          format: date-time
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ==================== AUTH ====================
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /auth/signup:
+    post:
+      tags: [Auth]
+      summary: Signup (legacy — prefer /users/register)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterUserRequest"
+      responses:
+        "201":
+          description: User registered
+        "400":
+          description: Validation error
+
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Request password reset email
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPasswordRequest"
+      responses:
+        "200":
+          description: Reset email sent (if account exists)
+        "404":
+          description: User not found
+
+  /auth/reset-password/{token}:
+    post:
+      tags: [Auth]
+      summary: Reset password with token
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordRequest"
+      responses:
+        "200":
+          description: Password updated
+        "400":
+          description: Invalid or expired token
+
+  # ==================== USERS ====================
+  /users/register:
+    post:
+      tags: [Users]
+      summary: Register (creates a pending approval request)
+      description: |
+        Public signup endpoint used by the student/trainer registration form.
+        Account stays **pending** until an admin approves via `POST /users/approve/{id}`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterUserRequest"
+            example:
+              name: John Doe
+              email: john@example.com
+              phone: "9876543210"
+              altPhone: "9123456780"
+              dob: "2000-01-15"
+              address: "123 Main Street, Chennai, Tamil Nadu"
+              role: student
+              education: B.E Computer Science
+              university: Anna University
+              profession: Software Developer
+              experience: fresher
+              employmentStatus: Employed
+      responses:
+        "201":
+          description: Registration request created (pending admin approval)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Registration request submitted
+                  user:
+                    $ref: "#/components/schemas/User"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /users/admin-create:
+    post:
+      tags: [Users]
+      summary: Admin creates a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterUserRequest"
+      responses:
+        "201":
+          description: User created
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+
+  /users/pending:
+    get:
+      tags: [Users]
+      summary: List pending user registrations
+      responses:
+        "200":
+          description: Pending users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+
+  /users/allUsers:
+    get:
+      tags: [Users]
+      summary: List all users
+      responses:
+        "200":
+          description: All users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+
+  /users/approve/{id}:
+    post:
+      tags: [Users]
+      summary: Approve a pending user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User approved
+        "404":
+          description: User not found
+
+  /users/pending/{id}:
+    delete:
+      tags: [Users]
+      summary: Reject / remove a pending user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Pending user rejected
+        "404":
+          description: User not found
+
+  /users/{id}:
+    put:
+      tags: [Users]
+      summary: Update a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/User"
+      responses:
+        "200":
+          description: User updated
+        "404":
+          description: User not found
+    delete:
+      tags: [Users]
+      summary: Delete a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User deleted
+        "404":
+          description: User not found
+
+  # ==================== COURSES ====================
+  /courses:
+    get:
+      tags: [Courses]
+      summary: List all courses
+      responses:
+        "200":
+          description: Course list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Course"
+    post:
+      tags: [Courses]
+      summary: Create a course
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CourseRequest"
+      responses:
+        "201":
+          description: Course created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Course"
+        "400":
+          description: Validation error
+
+  /courses/{courseId}:
+    get:
+      tags: [Courses]
+      summary: Get course by ID
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Course details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Course"
+        "404":
+          description: Course not found
+    put:
+      tags: [Courses]
+      summary: Update a course
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CourseRequest"
+      responses:
+        "200":
+          description: Course updated
+        "404":
+          description: Course not found
+    delete:
+      tags: [Courses]
+      summary: Delete a course
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Course deleted
+        "404":
+          description: Course not found
+
+  /courses/{courseId}/versions:
+    get:
+      tags: [Courses]
+      summary: List course version history
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Version list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    _id:
+                      type: string
+                    version:
+                      type: integer
+                    createdAt:
+                      type: string
+                      format: date-time
+
+  /courses/{courseId}/rollback/{versionId}:
+    post:
+      tags: [Courses]
+      summary: Rollback course to a previous version
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Course rolled back
+        "404":
+          description: Course or version not found
+
+  # ==================== BATCHES ====================
+  /batches:
+    get:
+      tags: [Batches]
+      summary: List all batches
+      responses:
+        "200":
+          description: Batch list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Batch"
+    post:
+      tags: [Batches]
+      summary: Create a batch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BatchRequest"
+      responses:
+        "201":
+          description: Batch created
+        "400":
+          description: Validation error
+
+  /batches/{batchId}:
+    get:
+      tags: [Batches]
+      summary: Get batch by ID
+      parameters:
+        - name: batchId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Batch details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Batch"
+        "404":
+          description: Batch not found
+    put:
+      tags: [Batches]
+      summary: Update a batch
+      parameters:
+        - name: batchId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BatchRequest"
+      responses:
+        "200":
+          description: Batch updated
+        "404":
+          description: Batch not found
+    delete:
+      tags: [Batches]
+      summary: Delete a batch
+      parameters:
+        - name: batchId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Batch deleted
+        "404":
+          description: Batch not found
+
+  /batches/{batchId}/enroll:
+    post:
+      tags: [Batches]
+      summary: Enroll a student into a batch
+      parameters:
+        - name: batchId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnrollStudentRequest"
+      responses:
+        "200":
+          description: Student enrolled
+        "400":
+          description: Already enrolled or invalid
+        "404":
+          description: Batch or student not found
+
+  /batches/{batchId}/remove-student:
+    post:
+      tags: [Batches]
+      summary: Remove a student from a batch
+      parameters:
+        - name: batchId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RemoveStudentRequest"
+      responses:
+        "200":
+          description: Student removed
+        "404":
+          description: Batch or student not found
+
+  # ==================== ADMIN ====================
+  /admin/dashboard:
+    get:
+      tags: [Admin]
+      summary: Admin dashboard data
+      responses:
+        "200":
+          description: Dashboard payload
+
+  /admin/stats:
+    get:
+      tags: [Admin]
+      summary: Admin statistics
+      responses:
+        "200":
+          description: Stats summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalUsers:
+                    type: integer
+                  totalCourses:
+                    type: integer
+                  totalBatches:
+                    type: integer
+                  pendingApprovals:
+                    type: integer
+
+  /admin/enrollment-trends:
+    get:
+      tags: [Admin]
+      summary: Enrollment trends for charts
+      responses:
+        "200":
+          description: Trend data
+
+  /admin/user-distribution:
+    get:
+      tags: [Admin]
+      summary: User role distribution
+      responses:
+        "200":
+          description: Distribution data
+
+  /admin/recent-activity:
+    get:
+      tags: [Admin]
+      summary: Recent platform activity
+      responses:
+        "200":
+          description: Activity list
+
+  # ==================== TRAINER ====================
+  /trainer/trainer-summary:
+    get:
+      tags: [Trainer]
+      summary: Trainer home summary (batches overview)
+      responses:
+        "200":
+          description: Trainer summary with batches
+
+  /trainer/trainer-batch-details/{batchId}:
+    get:
+      tags: [Trainer]
+      summary: Detailed batch view for trainer
+      parameters:
+        - name: batchId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Batch details with modules/sections
+        "404":
+          description: Batch not found
+
+  /trainer/trainer-section-complete:
+    post:
+      tags: [Trainer]
+      summary: Toggle section completion for a batch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrainerSectionCompleteRequest"
+      responses:
+        "200":
+          description: Section completion updated
+        "400":
+          description: Invalid indexes
+
+  /trainer/trainer-profile:
+    get:
+      tags: [Trainer]
+      summary: Get trainer profile
+      responses:
+        "200":
+          description: Trainer profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    put:
+      tags: [Trainer]
+      summary: Update trainer profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/User"
+      responses:
+        "200":
+          description: Profile updated
+
+  /trainer/trainer-courses:
+    get:
+      tags: [Trainer]
+      summary: List courses assigned to trainer
+      responses:
+        "200":
+          description: Trainer courses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Course"
+
+  # ==================== STUDENT ====================
+  /student/profile:
+    get:
+      tags: [Student]
+      summary: Get student profile
+      responses:
+        "200":
+          description: Student profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    put:
+      tags: [Student]
+      summary: Update student profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudentProfileUpdate"
+      responses:
+        "200":
+          description: Profile updated
+
+  /student/change-password:
+    post:
+      tags: [Student]
+      summary: Change student password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "200":
+          description: Password changed
+        "400":
+          description: Current password incorrect
+
+  /student/my-courses:
+    get:
+      tags: [Student]
+      summary: List enrolled courses
+      responses:
+        "200":
+          description: Student courses
+
+  /student/course/{courseId}/progress:
+    get:
+      tags: [Student]
+      summary: Get progress for a course
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Course progress
+        "404":
+          description: Course not found
+
+  # ==================== CLASS SESSION ====================
+  /class-session/start:
+    post:
+      tags: [Class Session]
+      summary: Start a live class session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartClassRequest"
+      responses:
+        "201":
+          description: Session started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClassSession"
+        "400":
+          description: Session already active or invalid batch
+
+  /class-session/{sessionId}/attendance:
+    patch:
+      tags: [Class Session]
+      summary: Mark attendance for a session
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MarkAttendanceRequest"
+      responses:
+        "200":
+          description: Attendance updated
+        "404":
+          description: Session not found
+
+  /class-session/{sessionId}/end:
+    patch:
+      tags: [Class Session]
+      summary: End a class session
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EndClassRequest"
+      responses:
+        "200":
+          description: Session ended
+        "404":
+          description: Session not found
+
+  /class-session/batch/{batchId}:
+    get:
+      tags: [Class Session]
+      summary: List sessions for a batch
+      parameters:
+        - name: batchId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Session list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ClassSession"
+
+  /class-session/student/me:
+    get:
+      tags: [Class Session]
+      summary: Get attendance for logged-in student
+      responses:
+        "200":
+          description: Student attendance history
+
+  /class-session/batch/{batchId}/report:
+    get:
+      tags: [Class Session]
+      summary: Attendance report for a batch
+      parameters:
+        - name: batchId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Batch attendance report
+        "404":
+          description: Batch not found
+
+  # ==================== SYNC ====================
+  /sync/manual:
+    post:
+      tags: [Sync]
+      summary: Trigger manual data sync
+      responses:
+        "200":
+          description: Sync started / completed
+
+  # ==================== RECYCLE BIN ====================
+  /bin:
+    get:
+      tags: [Recycle Bin]
+      summary: List soft-deleted items
+      responses:
+        "200":
+          description: Recycle bin items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BinItem"
+
+  /bin/{id}/restore:
+    post:
+      tags: [Recycle Bin]
+      summary: Restore an item from the recycle bin
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Item restored
+        "404":
+          description: Item not found
+
+  /bin/{id}:
+    delete:
+      tags: [Recycle Bin]
+      summary: Permanently delete an item from the recycle bin
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Item permanently deleted
+        "404":
+          description: Item not found

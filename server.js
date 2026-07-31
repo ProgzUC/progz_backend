@@ -1,4 +1,6 @@
 import express from "express";
+import path from "path";
+import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 import cors from "cors";
 import swaggerUi from "swagger-ui-express";
@@ -23,6 +25,9 @@ dotenv.config();
 connectDB();
 console.log("Environment:", process.env.MONGO_URI);
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const allowedOrigins = [
   "http://localhost:5173",
   "https://progz.urbancode.in",
@@ -44,7 +49,15 @@ app.use(
 );
 app.use(express.json());
 
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+// Role-based docs (student / trainer / admin) from public/api-docs
+app.use(express.static(path.join(__dirname, "public")));
+
+// Auto-generated swagger from route annotations
+app.use(
+  "/api-docs-generated",
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerSpec, { customSiteTitle: "Progz API — All (Generated)" })
+);
 
 app.get("/ping", (req, res) => {
   res.status(200).json({

@@ -1,0 +1,365 @@
+openapi: 3.0.3
+info:
+  title: Progz API — Admin
+  description: |
+    Admin-only API documentation for Progz platform.
+
+    **Auth:** Use `POST /auth/login` — token auto-saves in Swagger UI / Postman (Bearer JWT, not cookies).
+  version: 1.0.0
+
+servers:
+  - url: https://progz-backend.onrender.com/api
+    description: Production (Live)
+  - url: http://localhost:5002/api
+    description: Local development
+
+tags:
+  - name: Auth
+  - name: Users
+  - name: Admin
+  - name: Courses
+  - name: Batches
+  - name: Sync
+  - name: Recycle Bin
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, example: admin@progz.com }
+        password: { type: string, format: password, writeOnly: true }
+
+    LoginResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: JWT access token (auto-saved in Swagger UI / Postman)
+
+    RegisterUserRequest:
+      type: object
+      required: [name, email, password, role]
+      properties:
+        name: { type: string }
+        email: { type: string, format: email }
+        password: { type: string, writeOnly: true }
+        role: { type: string, enum: [student, trainer] }
+        phone: { type: string }
+        education: { type: string }
+        university: { type: string }
+        skills: { type: string }
+
+    BatchRequest:
+      type: object
+      required: [name, course]
+      properties:
+        name: { type: string }
+        course: { type: string }
+        daysOfWeek: { type: array, items: { type: string } }
+        meetLink: { type: string }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+
+    EnrollStudentRequest:
+      type: object
+      required: [studentId]
+      properties:
+        studentId: { type: string }
+        instructorId: { type: string }
+
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Admin login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LoginResponse" }
+
+  /users/pending:
+    get:
+      tags: [Users]
+      summary: List pending registrations
+      responses:
+        "200": { description: Pending users }
+
+  /users/allUsers:
+    get:
+      tags: [Users]
+      summary: List all users
+      responses:
+        "200": { description: All users }
+
+  /users/approve/{id}:
+    post:
+      tags: [Users]
+      summary: Approve pending user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: User approved }
+
+  /users/pending/{id}:
+    delete:
+      tags: [Users]
+      summary: Reject pending user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: User rejected }
+
+  /users/admin-create:
+    post:
+      tags: [Users]
+      summary: Create user (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterUserRequest" }
+      responses:
+        "201": { description: User created }
+
+  /users/{id}:
+    put:
+      tags: [Users]
+      summary: Update user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200": { description: User updated }
+    delete:
+      tags: [Users]
+      summary: Delete user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: User deleted }
+
+  /admin/stats:
+    get:
+      tags: [Admin]
+      summary: Dashboard statistics
+      responses:
+        "200": { description: Stats }
+
+  /admin/enrollment-trends:
+    get:
+      tags: [Admin]
+      summary: Enrollment trends
+      responses:
+        "200": { description: Trend data }
+
+  /admin/user-distribution:
+    get:
+      tags: [Admin]
+      summary: User distribution by role
+      responses:
+        "200": { description: Distribution }
+
+  /admin/recent-activity:
+    get:
+      tags: [Admin]
+      summary: Recent activity feed
+      responses:
+        "200": { description: Activity list }
+
+  /courses:
+    get:
+      tags: [Courses]
+      summary: List courses
+      responses:
+        "200": { description: Courses }
+    post:
+      tags: [Courses]
+      summary: Create course
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "201": { description: Created }
+
+  /courses/{courseId}:
+    get:
+      tags: [Courses]
+      summary: Get course
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Course }
+    put:
+      tags: [Courses]
+      summary: Update course
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200": { description: Updated }
+    delete:
+      tags: [Courses]
+      summary: Delete course
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Deleted }
+
+  /batches:
+    get:
+      tags: [Batches]
+      summary: List batches
+      responses:
+        "200": { description: Batches }
+    post:
+      tags: [Batches]
+      summary: Create batch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BatchRequest" }
+      responses:
+        "201": { description: Created }
+
+  /batches/{batchId}:
+    get:
+      tags: [Batches]
+      summary: Get batch
+      parameters:
+        - name: batchId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Batch }
+    put:
+      tags: [Batches]
+      summary: Update batch
+      parameters:
+        - name: batchId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BatchRequest" }
+      responses:
+        "200": { description: Updated }
+    delete:
+      tags: [Batches]
+      summary: Delete batch
+      parameters:
+        - name: batchId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Deleted }
+
+  /batches/{batchId}/enroll:
+    post:
+      tags: [Batches]
+      summary: Enroll student in batch
+      parameters:
+        - name: batchId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EnrollStudentRequest" }
+      responses:
+        "200": { description: Enrolled }
+
+  /sync/manual:
+    post:
+      tags: [Sync]
+      summary: Trigger manual sync
+      responses:
+        "200": { description: Sync done }
+
+  /bin:
+    get:
+      tags: [Recycle Bin]
+      summary: List deleted items
+      responses:
+        "200": { description: Bin items }
+
+  /bin/{id}/restore:
+    post:
+      tags: [Recycle Bin]
+      summary: Restore item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Restored }
+
+  /bin/{id}:
+    delete:
+      tags: [Recycle Bin]
+      summary: Permanently delete
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Deleted }
