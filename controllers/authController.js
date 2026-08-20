@@ -95,9 +95,9 @@ export const login = async (req, res) => {
       return res.status(401).json({ msg: "Invalid email or password" });
     }
 
-    await issueAuthSession(res, user);
+    const sessionData = await issueAuthSession(res, user);
     clearLoginFailures(rateLimitKey);
-    res.json({ msg: "Login successful" });
+    res.json(sessionData);
 
   } catch (error) {
     res.status(500).json({ msg: error.message });
