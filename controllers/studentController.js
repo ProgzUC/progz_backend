@@ -3,6 +3,8 @@ import Course from "../models/Course.js";
 import Batch from "../models/Batch.js";
 import bcrypt from "bcryptjs";
 import { validatePassword } from "../utils/passwordValidation.js";
+import { revokeRefreshToken } from "../utils/refreshTokenStore.js";
+import { clearAuthCookies } from "../utils/cookieAuth.js";
 
 /**
  * @desc    Get student profile
@@ -58,9 +60,42 @@ export async function updateStudentProfile(req, res) {
         const {
             phone, location, education, jobTitle,
             altPhone, dob, gender, university, profession,
-            employmentStatus, experience, skills
-            , profileImage
+            employmentStatus, experience, skills,
+            profileImage,
+            password,
+            newPassword,
+            currentPassword,
+            confirmPassword,
         } = req.body;
+
+        const nextPassword = newPassword ?? password;
+        if (nextPassword != null && String(nextPassword).trim() !== "") {
+            if (!currentPassword) {
+                return res.status(400).json({
+                    message: "Current password is required to set a new password",
+                });
+            }
+
+            const passwordCheck = validatePassword(nextPassword);
+            if (!passwordCheck.ok) {
+                return res.status(400).json({ message: passwordCheck.message });
+            }
+
+            const existingUser = await User.findById(studentId);
+            if (!existingUser) {
+                return res.status(404).json({ message: "User not found" });
+            }
+
+            const isMatch = await bcrypt.compare(currentPassword, existingUser.password);
+            if (!isMatch) {
+                return res.status(401).json({ message: "Current password is incorrect" });
+            }
+
+            existingUser.password = await bcrypt.hash(nextPassword, 10);
+            await revokeRefreshToken(existingUser._id);
+            await existingUser.save();
+            clearAuthCookies(res);
+        }
 
         const updateData = {
             phone,
@@ -152,9 +187,13 @@ export async function changePassword(req, res) {
         // Hash and update new password
         const salt = await bcrypt.genSalt(10);
         user.password = await bcrypt.hash(newPassword, salt);
+        await revokeRefreshToken(user._id);
         await user.save();
+        clearAuthCookies(res);
 
-        res.json({ message: "Password changed successfully" });
+        res.json({
+            message: "Password changed successfully. Please log in again.",
+        });
     } catch (error) {
         console.error("Change password error:", error);
         res.status(500).json({ message: "Failed to change password" });
@@ -180,6 +219,7 @@ export async function getStudentCourses(req, res) {
         const enrolledCourses = [];
 
         for (const ec of user.enrolledCourses || []) {
+            if (!ec) continue;
             const courseDoc = ec.course;
             const batch = ec.batch;
 

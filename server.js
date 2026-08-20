@@ -3,6 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import swaggerUi from "swagger-ui-express";
 import swaggerSpec from "./config/swagger.js";
 import connectDB from "./config/db.js";
@@ -23,7 +24,7 @@ import { initCronJobs } from "./jobs/cronJobs.js";
 dotenv.config();
 
 connectDB();
-console.log("Environment:", process.env.MONGO_URI);
+console.log("Environment: MONGO_URI", process.env.MONGO_URI ? "set" : "missing");
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -47,6 +48,7 @@ app.use(
     credentials: true,
   })
 );
+app.use(cookieParser());
 app.use(express.json());
 
 // Role-based docs (student / trainer / admin) from public/api-docs
@@ -69,6 +71,7 @@ app.get("/ping", (req, res) => {
 
 // createOrUpdateAdmin();
 app.use("/api/auth", authRoutes);
+app.use("/auth", authRoutes); // compatibility alias for clients using /auth/login directly
 app.use("/api/trainer", trainerRoutes)
 app.use("/api/courses", courseRoutes);
 app.use("/api/users", userRoutes);
@@ -149,3 +152,4 @@ initCronJobs();
 
 const PORT = process.env.PORT || 5002;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+

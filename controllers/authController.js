@@ -7,8 +7,46 @@ import {
   generateRefreshToken,
   getTokenExpiryConfig,
 } from "../utils/generateTokens.js";
+import {
+  setAuthCookies,
+  clearAuthCookies,
+  REFRESH_TOKEN_COOKIE,
+} from "../utils/cookieAuth.js";
+import {
+  saveRefreshToken,
+  verifyStoredRefreshToken,
+  revokeRefreshToken,
+} from "../utils/refreshTokenStore.js";
 import sendWithBrevo from "../utils/sendWithBrevo.js";
 import { validatePassword } from "../utils/passwordValidation.js";
+import {
+  clearLoginFailures,
+  recordLoginFailure,
+} from "../middlewares/loginRateLimit.js";
+
+const buildAuthUser = (user) => ({
+  id: user._id,
+  name: user.name,
+  email: user.email,
+  role: user.role,
+});
+
+const issueAuthSession = async (res, user) => {
+  const accessToken = generateAccessToken(user);
+  const refreshToken = generateRefreshToken(user);
+  const expiry = getTokenExpiryConfig();
+
+  await saveRefreshToken(user._id, refreshToken);
+  setAuthCookies(res, accessToken, refreshToken);
+
+  return {
+    msg: "Login successful",
+    role: user.role,
+    expiresIn: expiry.accessTokenExpiresIn,
+    refreshExpiresIn: expiry.refreshTokenExpiresIn,
+    user: buildAuthUser(user),
+  };
+};
 
 export const register = async (req, res) => {
   try {
@@ -43,32 +81,39 @@ export const register = async (req, res) => {
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
+    const rateLimitKey = res.locals.loginRateLimitKey;
 
     const user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ msg: "User not found" });
+    if (!user) {
+      recordLoginFailure(rateLimitKey);
+      return res.status(401).json({ msg: "Invalid email or password" });
+    }
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ msg: "Invalid password" });
+    if (!isMatch) {
+      recordLoginFailure(rateLimitKey);
+      return res.status(401).json({ msg: "Invalid email or password" });
+    }
 
-    const accessToken = generateAccessToken(user);
-    const refreshToken = generateRefreshToken(user);
-    const expiry = getTokenExpiryConfig();
+    await issueAuthSession(res, user);
+    clearLoginFailures(rateLimitKey);
+    res.json({ msg: "Login successful" });
 
+  } catch (error) {
+    res.status(500).json({ msg: error.message });
+  }
+};
+
+export const getMe = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ msg: "User not found" });
+    }
     res.json({
-      msg: "Login successful",
+      user: buildAuthUser(user),
       role: user.role,
-      accessToken,
-      refreshToken,
-      expiresIn: expiry.accessTokenExpiresIn,
-      refreshExpiresIn: expiry.refreshTokenExpiresIn,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      },
     });
-
   } catch (error) {
     res.status(500).json({ msg: error.message });
   }
@@ -76,37 +121,75 @@ export const login = async (req, res) => {
 
 export const refreshAccessToken = async (req, res) => {
   try {
-    const { refreshToken } = req.body;
+    const authHeader = req.headers.authorization;
+    const headerToken = authHeader && authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+    const refreshToken =
+      req.cookies?.[REFRESH_TOKEN_COOKIE] || req.body?.refreshToken || headerToken;
+
     if (!refreshToken) {
+      clearAuthCookies(res);
       return res.status(401).json({ msg: "Refresh token required" });
     }
 
     let decoded;
     try {
       decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
-    } catch {
-      return res.status(401).json({ msg: "Invalid or expired refresh token" });
+    } catch (error) {
+      clearAuthCookies(res);
+      if (error.name === "TokenExpiredError") {
+        return res.status(401).json({ msg: "Refresh token expired" });
+      }
+      return res.status(401).json({ msg: "Invalid refresh token" });
     }
 
     const user = await User.findById(decoded.id);
     if (!user) {
+      clearAuthCookies(res);
       return res.status(401).json({ msg: "User not found" });
     }
 
-    const accessToken = generateAccessToken(user);
+    const isValid = await verifyStoredRefreshToken(user._id, refreshToken);
+    if (!isValid) {
+      await revokeRefreshToken(user._id);
+      clearAuthCookies(res);
+      return res.status(401).json({ msg: "Invalid or revoked refresh token" });
+    }
+
+    const newAccessToken = generateAccessToken(user);
+    const newRefreshToken = generateRefreshToken(user);
     const expiry = getTokenExpiryConfig();
+
+    await saveRefreshToken(user._id, newRefreshToken);
+    setAuthCookies(res, newAccessToken, newRefreshToken);
 
     res.json({
       msg: "Token refreshed",
-      accessToken,
+      role: user.role,
       expiresIn: expiry.accessTokenExpiresIn,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      },
+      refreshExpiresIn: expiry.refreshTokenExpiresIn,
+      user: buildAuthUser(user),
     });
+  } catch (error) {
+    res.status(500).json({ msg: error.message });
+  }
+};
+
+export const logout = async (req, res) => {
+  try {
+    const refreshToken =
+      req.cookies?.[REFRESH_TOKEN_COOKIE] || req.body?.refreshToken;
+
+    if (refreshToken) {
+      try {
+        const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+        await revokeRefreshToken(decoded.id);
+      } catch {
+        // Ignore invalid/expired tokens during logout.
+      }
+    }
+
+    clearAuthCookies(res);
+    res.json({ msg: "Logged out successfully" });
   } catch (error) {
     res.status(500).json({ msg: error.message });
   }
@@ -205,23 +288,6 @@ export const forgotPassword = async (req, res) => {
 
   `;
 
-  // try {
-  //   await sendEmail({
-  //     email: user.email,
-  //     subject: "Password Reset Request",
-  //     html: message,
-  //   });
-
-  //   res.json({ msg: "Password reset link sent" });
-  // } catch (error) {
-  //   console.error("Email send error:", error); // Log the actual error
-  //   user.resetPasswordToken = undefined;
-  //   user.resetPasswordExpires = undefined;
-  //   await user.save();
-
-  //   return res.status(500).json({ msg: "Email could not be sent" });
-  // }
-
   try {
     await sendWithBrevo({
       email: user.email,
@@ -233,7 +299,7 @@ export const forgotPassword = async (req, res) => {
 
     res.json({ msg: "Password reset link sent" });
   } catch (error) {
-    console.error("Email send error:", error); // Log the actual error
+    console.error("Email send error:", error);
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
     await user.save();
@@ -269,6 +335,8 @@ export const resetPassword = async (req, res) => {
   user.password = await bcrypt.hash(password, 10);
   user.resetPasswordToken = undefined;
   user.resetPasswordExpires = undefined;
+  user.refreshTokenHash = undefined;
+  user.refreshTokenExpires = undefined;
 
   await user.save();
 

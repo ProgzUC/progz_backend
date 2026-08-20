@@ -4,6 +4,8 @@ import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 import { getNextClassDate } from "../utils/getNextClassDate.js";
 import { validatePassword } from "../utils/passwordValidation.js";
+import { revokeRefreshToken } from "../utils/refreshTokenStore.js";
+import { clearAuthCookies } from "../utils/cookieAuth.js";
 
 export const trainerBootstrap = async (req, res) => {
   try {
@@ -244,7 +246,19 @@ export const getTrainerprofile = async (req, res) => {
 export const updateTrainerprofile = async (req, res) => {
   try {
     const trainerId = req.user.id;
-    const input = req.body || {};
+    const input = { ...(req.body || {}) };
+    const currentPassword = input.currentPassword;
+    const isPasswordUpdateRequested =
+      (input.newPassword != null && String(input.newPassword).trim() !== "") ||
+      (input.password != null && String(input.password).trim() !== "");
+
+    // Frontend edit forms often send newPassword instead of password
+    if (input.newPassword != null && input.password == null) {
+      input.password = input.newPassword;
+    }
+    delete input.newPassword;
+    delete input.currentPassword;
+    delete input.confirmPassword;
 
     // Protected fields that should not be updatable by the trainer themself
     const protectedFields = new Set([
@@ -271,12 +285,31 @@ export const updateTrainerprofile = async (req, res) => {
 
     // If password is being updated, hash it
     if (updates.password) {
+      if (!currentPassword) {
+        return res.status(400).json({
+          message: "Current password is required to set a new password",
+        });
+      }
+
       const passwordCheck = validatePassword(updates.password);
       if (!passwordCheck.ok) {
         return res.status(400).json({ message: passwordCheck.message });
       }
+
+      const trainerUser = await User.findById(trainerId).select("password");
+      if (!trainerUser) {
+        return res.status(404).json({ message: "Trainer not found" });
+      }
+
+      const isMatch = await bcrypt.compare(currentPassword, trainerUser.password);
+      if (!isMatch) {
+        return res.status(401).json({ message: "Current password is incorrect" });
+      }
+
       const salt = await bcrypt.genSalt(10);
       updates.password = await bcrypt.hash(updates.password, salt);
+      await revokeRefreshToken(trainerId);
+      clearAuthCookies(res);
     }
 
     // If nothing to update, return current profile
@@ -293,7 +326,15 @@ export const updateTrainerprofile = async (req, res) => {
       .select("-password")
       .lean();
 
-    res.json(trainer);
+    res.json({
+      ...trainer,
+      ...(isPasswordUpdateRequested
+        ? {
+            message: "Password updated successfully. Please log in again.",
+            reauthRequired: true,
+          }
+        : {}),
+    });
   } catch (err) {
     console.error("updateTrainerprofile error:", err);
     res.status(500).json({ message: "Update failed" });

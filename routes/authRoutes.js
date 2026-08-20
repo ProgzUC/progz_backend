@@ -3,10 +3,13 @@ import {
   register,
   login,
   refreshAccessToken,
+  logout,
   forgotPassword,
   resetPassword,
+  getMe,
 } from "../controllers/authController.js";
 import { protect, authorizeRoles } from "../middlewares/authMiddleware.js";
+import { loginRateLimit } from "../middlewares/loginRateLimit.js";
 
 const router = express.Router();
 
@@ -33,7 +36,7 @@ const router = express.Router();
  * @swagger
  * /auth/login:
  *   post:
- *     summary: Log in and receive access/refresh tokens
+ *     summary: Log in and receive auth cookies (HTTP-only)
  *     tags: [Auth]
  *     security: []
  *     responses:
@@ -47,14 +50,26 @@ const router = express.Router();
  * @swagger
  * /auth/refresh:
  *   post:
- *     summary: Exchange a refresh token for a new access token
+ *     summary: Rotate refresh token and issue new access token via cookies
  *     tags: [Auth]
  *     security: []
  *     responses:
  *       200:
- *         description: New access token issued
+ *         description: New access and refresh tokens issued via cookies
  *       401:
  *         description: Invalid or expired refresh token
+ */
+
+/**
+ * @swagger
+ * /auth/logout:
+ *   post:
+ *     summary: Log out and clear auth cookies
+ *     tags: [Auth]
+ *     security: []
+ *     responses:
+ *       200:
+ *         description: Logged out successfully
  */
 
 /**
@@ -89,10 +104,12 @@ const router = express.Router();
 
 // PUBLIC ROUTES
 router.post("/register", register);
-router.post("/login", login);
+router.post("/login", loginRateLimit, login);
 router.post("/refresh", refreshAccessToken);
+router.post("/logout", logout);
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password/:token", resetPassword);
+router.get("/me", protect, getMe);
 
 // // PROTECTED ADMIN ONLY
 // router.get("/admin-dashboard", protect, authorizeRoles("admin"), (req, res) => {

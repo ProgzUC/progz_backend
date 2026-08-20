@@ -29,6 +29,8 @@ const userSchema = new mongoose.Schema(
     },
     resetPasswordToken: String,
     resetPasswordExpires: Date,
+    refreshTokenHash: String,
+    refreshTokenExpires: Date,
 
     enrolledCourses: [
       {

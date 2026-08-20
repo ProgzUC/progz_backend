@@ -255,6 +255,27 @@ export const updateUser = async (req, res) => {
             delete updates.role;
         }
 
+        const nextPassword = updates.newPassword ?? updates.password;
+        delete updates.newPassword;
+        delete updates.password;
+        delete updates.currentPassword;
+        delete updates.confirmPassword;
+
+        if (nextPassword != null && String(nextPassword).trim() !== "") {
+            if (userRole !== "admin") {
+                return res.status(403).json({
+                    msg: "Only admins can update passwords from user edit",
+                });
+            }
+
+            const passwordCheck = validatePassword(nextPassword);
+            if (!passwordCheck.ok) {
+                return res.status(400).json({ msg: passwordCheck.message });
+            }
+
+            user.password = await bcrypt.hash(nextPassword, 10);
+        }
+
         // Apply updates
         const allowedFields = [
             "name", "phone",
