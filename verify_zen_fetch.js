@@ -2,10 +2,11 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 import User from "./models/User.js";
 import bcrypt from "bcryptjs";
+import { getTestPassword } from "./scripts/testCredentials.js";
 
 dotenv.config();
 
-const API_URL = "http://127.0.0.1:5001/api";
+const API_URL = process.env.TEST_API_BASE_URL || "http://127.0.0.1:5002/api";
 
 const post = async (url, data, token) => {
     const headers = { "Content-Type": "application/json" };
@@ -34,23 +35,23 @@ const get = async (url, token) => {
 };
 
 const setupData = async () => {
+    const adminPasswordPlain = getTestPassword("admin");
     let admin = await User.findOne({ role: "admin" });
     if (!admin) {
-        // Fallback if no admin exists (unlikely in this flow)
-        const hashed = await bcrypt.hash("Admin@123", 10);
-        admin = await User.create({ name: "Admin", email: "verify_zen@progz.in", password: hashed, role: "admin", phone: "000" });
+        const hashed = await bcrypt.hash(adminPasswordPlain, 10);
+        admin = await User.create({ name: "Admin", email: process.env.TEST_ADMIN_EMAIL || "verify_zen@progz.in", password: hashed, role: "admin", phone: "000" });
     }
-    return { admin };
+    return { admin, adminPasswordPlain };
 };
 
 const runVerification = async () => {
     try {
         await mongoose.connect(process.env.MONGO_URI);
         console.log("Connected to DB");
-        const { admin } = await setupData();
+        const { admin, adminPasswordPlain } = await setupData();
 
         // Login Admin
-        const loginRes = await post(`${API_URL}/auth/login`, { email: admin.email, password: "Admin@123" });
+        const loginRes = await post(`${API_URL}/auth/login`, { email: admin.email, password: adminPasswordPlain });
         const token = loginRes.data.accessToken;
 
         console.log("\n--- Step 1: Fetch Zen Trainers ---");

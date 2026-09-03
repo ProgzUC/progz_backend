@@ -3,10 +3,11 @@ import dotenv from "dotenv";
 import User from "./models/User.js";
 import Batch from "./models/Batch.js";
 import bcrypt from "bcryptjs";
+import { getTestPassword } from "./scripts/testCredentials.js";
 
 dotenv.config();
 
-const API_URL = "http://127.0.0.1:5001/api";
+const API_URL = process.env.TEST_API_BASE_URL || "http://127.0.0.1:5002/api";
 
 const post = async (url, data, token) => {
     const headers = { "Content-Type": "application/json" };
@@ -22,11 +23,13 @@ const post = async (url, data, token) => {
 };
 
 const setupData = async () => {
+    const trainerPasswordPlain = getTestPassword("trainer");
+
     // 1. Ensure Trainer for toggling
     let trainer = await User.findOne({ role: "trainer" });
     if (!trainer) {
-        const hashed = await bcrypt.hash("Trainer@123", 10);
-        trainer = await User.create({ name: "Toggle Trainer", email: "toggle_trainer@progz.in", password: hashed, role: "trainer", phone: "999" });
+        const hashed = await bcrypt.hash(trainerPasswordPlain, 10);
+        trainer = await User.create({ name: "Toggle Trainer", email: process.env.TEST_TRAINER_EMAIL || "toggle_trainer@progz.in", password: hashed, role: "trainer", phone: "999" });
     }
 
     // 2. Ensure Batch exists
@@ -35,17 +38,17 @@ const setupData = async () => {
         throw new Error("No batch found. Run verify_batch_flow.js first.");
     }
 
-    return { trainer, batch };
+    return { trainer, batch, trainerPasswordPlain };
 };
 
 const runVerification = async () => {
     try {
         await mongoose.connect(process.env.MONGO_URI);
         console.log("Connected to DB");
-        const { trainer, batch } = await setupData();
+        const { trainer, batch, trainerPasswordPlain } = await setupData();
 
         // Login Trainer
-        const loginRes = await post(`${API_URL}/auth/login`, { email: trainer.email, password: "Trainer@123" });
+        const loginRes = await post(`${API_URL}/auth/login`, { email: trainer.email, password: trainerPasswordPlain });
         const token = loginRes.data.accessToken;
 
         console.log("\n--- Step 1: Mark Section as Completed ---");

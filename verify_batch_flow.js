@@ -4,6 +4,7 @@ import User from "./models/User.js";
 import Course from "./models/Course.js";
 import Batch from "./models/Batch.js";
 import bcrypt from "bcryptjs";
+import { getTestPassword } from "./scripts/testCredentials.js";
 
 dotenv.config();
 
@@ -36,14 +37,18 @@ const get = async (url, token) => {
 };
 
 const setupData = async () => {
+    const adminPasswordPlain = getTestPassword("admin");
+    const trainerPasswordPlain = getTestPassword("trainer");
+    const studentPasswordPlain = getTestPassword("student");
+
     // 1. Ensure Admin
     let admin = await User.findOne({ role: "admin" });
-    const adminPass = await bcrypt.hash("Admin@123", 10);
+    const adminPass = await bcrypt.hash(adminPasswordPlain, 10);
     if (!admin) {
-        admin = await User.create({ name: "Admin", email: "admin_batch@progz.in", password: adminPass, role: "admin", phone: "111", isApproved: true });
+        admin = await User.create({ name: "Admin", email: process.env.TEST_ADMIN_EMAIL || "admin_batch@progz.in", password: adminPass, role: "admin", phone: "111", isApproved: true });
     } else {
         admin.password = adminPass;
-        admin.isApproved = true; // Ensure approved just in case
+        admin.isApproved = true;
         await admin.save();
     }
 
@@ -56,28 +61,28 @@ const setupData = async () => {
     // 3. Ensure Trainer
     let trainer = await User.findOne({ role: "trainer" });
     if (!trainer) {
-        const hashed = await bcrypt.hash("Trainer@123", 10);
-        trainer = await User.create({ name: "Trainer", email: "trainer_batch@progz.in", password: hashed, role: "trainer", phone: "222" });
+        const hashed = await bcrypt.hash(trainerPasswordPlain, 10);
+        trainer = await User.create({ name: "Trainer", email: process.env.TEST_TRAINER_EMAIL || "trainer_batch@progz.in", password: hashed, role: "trainer", phone: "222" });
     }
 
     // 4. Ensure Student
     let student = await User.findOne({ role: "student" });
     if (!student) {
-        const hashed = await bcrypt.hash("Student@123", 10);
-        student = await User.create({ name: "Student", email: "student_batch@progz.in", password: hashed, role: "student", phone: "333" });
+        const hashed = await bcrypt.hash(studentPasswordPlain, 10);
+        student = await User.create({ name: "Student", email: process.env.TEST_STUDENT_EMAIL || "student_batch@progz.in", password: hashed, role: "student", phone: "333" });
     }
 
-    return { admin, course, trainer, student };
+    return { admin, course, trainer, student, adminPasswordPlain };
 };
 
 const runVerification = async () => {
     try {
         await mongoose.connect(process.env.MONGO_URI);
         console.log("Connected to DB");
-        const { admin, course, trainer, student } = await setupData();
+        const { admin, course, trainer, student, adminPasswordPlain } = await setupData();
 
         // Login Admin
-        const loginRes = await post(`${API_URL}/auth/login`, { email: admin.email, password: "Admin@123" });
+        const loginRes = await post(`${API_URL}/auth/login`, { email: admin.email, password: adminPasswordPlain });
         const token = loginRes.data.accessToken;
         if (!token) throw new Error("Login failed");
 

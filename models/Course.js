@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 
 const sectionSchema = new mongoose.Schema({
   sectionName: { type: String, required: true, trim: true },
+  lessonType: { type: String, enum: ['Theory', 'Coding Practice'], default: 'Theory' },
   learningMaterialNotes: String,
   learningMaterialFile: [{
     url: String,

@@ -14,6 +14,7 @@ import {
 import { protect, authorizeRoles } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
+const staffRoles = authorizeRoles("admin", "trainer");
 
 /**
  * @swagger
@@ -44,8 +45,8 @@ const router = express.Router();
  */
 router
     .route("/")
-    .post(protect, authorizeRoles("admin", "trainer"), createCourse)
-    .get(protect, getAllCourses);
+    .post(protect, staffRoles, createCourse)
+    .get(protect, staffRoles, getAllCourses);
 
 /**
  * @swagger
@@ -101,9 +102,9 @@ router
  */
 router
     .route("/:id")
-    .get(protect, getCourse)
-    .put(protect, authorizeRoles("admin", "trainer"), updateCourse)
-    .delete(protect, authorizeRoles("admin", "trainer"), deleteCourse);
+    .get(protect, staffRoles, getCourse)
+    .put(protect, staffRoles, updateCourse)
+    .delete(protect, staffRoles, deleteCourse);
 
 /**
  * @swagger
@@ -123,7 +124,7 @@ router
  *       200:
  *         description: List of course versions
  */
-router.get("/:id/versions", protect, getCourseVersions);
+router.get("/:id/versions", protect, staffRoles, getCourseVersions);
 
 /**
  * @swagger
@@ -148,25 +149,10 @@ router.get("/:id/versions", protect, getCourseVersions);
  *       200:
  *         description: Course rolled back
  */
-router.post("/:id/rollback/:versionId", protect, authorizeRoles("admin", "trainer"), rollbackCourse);
+router.post("/:id/rollback/:versionId", protect, staffRoles, rollbackCourse);
 
-router.put(
-    "/:id/instructors/add",
-    protect,
-    authorizeRoles("admin", "trainer"),
-    addInstructor
-);
-router.put(
-    "/:id/instructors/remove",
-    protect,
-    authorizeRoles("admin", "trainer"),
-    removeInstructor
-);
-router.put(
-    "/:id/instructors",
-    protect,
-    authorizeRoles("admin", "trainer"),
-    updateInstructors
-);
+router.put("/:id/instructors/add", protect, staffRoles, addInstructor);
+router.put("/:id/instructors/remove", protect, staffRoles, removeInstructor);
+router.put("/:id/instructors", protect, staffRoles, updateInstructors);
 
 export default router;

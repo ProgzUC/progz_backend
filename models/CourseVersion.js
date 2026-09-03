@@ -7,6 +7,7 @@ import mongoose from "mongoose";
 
 const sectionSchema = new mongoose.Schema({
     sectionName: { type: String, trim: true },
+    lessonType: { type: String, enum: ['Theory', 'Coding Practice'], default: 'Theory' },
     learningMaterialNotes: String,
     learningMaterialUrls: [String],
     codeChallengeInstructions: String,

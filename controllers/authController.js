@@ -41,6 +41,7 @@ const issueAuthSession = async (res, user) => {
 
   return {
     msg: "Login successful",
+    accessToken,
     role: user.role,
     expiresIn: expiry.accessTokenExpiresIn,
     refreshExpiresIn: expiry.refreshTokenExpiresIn,
@@ -48,34 +49,10 @@ const issueAuthSession = async (res, user) => {
   };
 };
 
-export const register = async (req, res) => {
-  try {
-    const { email, password, role } = req.body;
-
-    const passwordCheck = validatePassword(password);
-    if (!passwordCheck.ok) {
-      return res.status(400).json({ msg: passwordCheck.message });
-    }
-
-    const exists = await User.findOne({ email });
-    if (exists) return res.status(400).json({ msg: "Email already exists" });
-
-    const hashed = await bcrypt.hash(password, 10);
-
-    const user = await User.create({
-      ...req.body,
-      password: hashed,
-      role,
-    });
-
-    res.status(201).json({
-      msg: "User registered successfully",
-      user: { id: user._id, email: user.email, role: user.role },
-    });
-
-  } catch (error) {
-    res.status(500).json({ msg: error.message });
-  }
+export const register = async (_req, res) => {
+  return res.status(403).json({
+    msg: "Direct registration is disabled. Use /api/users/register and wait for admin approval.",
+  });
 };
 
 export const login = async (req, res) => {

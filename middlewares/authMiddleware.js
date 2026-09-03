@@ -32,9 +32,11 @@ export const protect = (req, res, next) => {
 };
 
 export const authorizeRoles = (...roles) => {
-  const normalizedAllowed = roles.map(r => r.toLowerCase());
+  const normalizedAllowed = roles.map((r) => r.toLowerCase());
   return (req, res, next) => {
-    const userRole = String(req.user?.role || "").toLowerCase();
+    let userRole = String(req.user?.role || "").toLowerCase();
+    if (userRole === "instructor") userRole = "trainer";
+
     if (!normalizedAllowed.includes(userRole)) {
       console.error(`🔒 Authorize roles failed: user role '${req.user?.role}' not in required roles [${roles.join(", ")}]`);
       return res.status(403).json({ msg: "Access denied" });

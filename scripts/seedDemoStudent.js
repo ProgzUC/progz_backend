@@ -3,18 +3,19 @@ import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
 import connectDB from "../config/db.js";
 import User from "../models/User.js";
+import requireEnv from "./requireEnv.js";
 
 dotenv.config();
 
 async function main() {
   await connectDB();
 
-  const email = process.env.DEMO_STUDENT_EMAIL || "student@urbancode.com";
-  const passwordPlain = process.env.DEMO_STUDENT_PASSWORD || "Student@123";
+  const email = requireEnv("DEMO_STUDENT_EMAIL");
+  const passwordPlain = requireEnv("DEMO_STUDENT_PASSWORD");
 
   const existing = await User.findOne({ email }).lean();
   if (existing) {
-    console.log(`ℹ️ Demo student already exists: ${email}`);
+    console.log(`Demo student already exists: ${email}`);
     return;
   }
 
@@ -33,13 +34,12 @@ async function main() {
     source: "seed",
   });
 
-  console.log(`✅ Demo student created: ${email}`);
-  console.log(`🔐 Password: ${passwordPlain}`);
+  console.log(`Demo student created: ${email}`);
 }
 
 main()
   .catch((err) => {
-    console.error("❌ Seed demo student failed:", err);
+    console.error("Seed demo student failed:", err);
     process.exitCode = 1;
   })
   .finally(async () => {
@@ -49,4 +49,3 @@ main()
       // ignore
     }
   });
-

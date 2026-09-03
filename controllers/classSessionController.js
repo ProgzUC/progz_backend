@@ -1,6 +1,7 @@
 import ClassSession from "../models/ClassSession.js";
 import Batch from "../models/Batch.js";
 import User from "../models/User.js";
+import { canManageBatch, denyAccess } from "../utils/authorizationHelpers.js";
 
 /**
  * @desc    Start a new class session
@@ -183,6 +184,15 @@ export async function getClassSessions(req, res) {
         const { batchId } = req.params;
         const { startDate, endDate } = req.query;
 
+        const batch = await Batch.findById(batchId).select("trainers").lean();
+        if (!batch) {
+            return res.status(404).json({ message: "Batch not found" });
+        }
+
+        if (!canManageBatch(req, batch)) {
+            return denyAccess(res, "You do not have access to this batch");
+        }
+
         // Build query
         const query = { batch: batchId };
 
@@ -323,6 +333,10 @@ export async function getBatchAttendanceReport(req, res) {
         const batch = await Batch.findById(batchId).populate("students", "name email").lean();
         if (!batch) {
             return res.status(404).json({ message: "Batch not found" });
+        }
+
+        if (!canManageBatch(req, batch)) {
+            return denyAccess(res, "You do not have access to this batch report");
         }
 
         // Get all sessions for this batch

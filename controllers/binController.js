@@ -2,6 +2,7 @@ import RecycleBin from "../models/RecycleBin.js";
 import Course from "../models/Course.js";
 import User from "../models/User.js";
 import Batch from "../models/Batch.js";
+import { logAuditAction } from "../utils/auditLogger.js";
 
 // @desc    Get all items in recycle bin
 // @route   GET /api/bin
@@ -57,6 +58,18 @@ export const restoreItem = async (req, res) => {
 
         await RecycleBin.findByIdAndDelete(id);
 
+        await logAuditAction({
+            req,
+            action: "restore_item",
+            targetType: itemType,
+            targetId: data._id,
+            details: {
+                name: binItem.itemRefName,
+                itemType,
+                binItemId: id
+            }
+        });
+
         res.json({ message: `${itemType} restored successfully` });
     } catch (error) {
         console.error("Restore error:", error);
@@ -75,6 +88,19 @@ export const permanentlyDeleteItem = async (req, res) => {
         if (!result) {
             return res.status(404).json({ message: "Item not found" });
         }
+
+        await logAuditAction({
+            req,
+            action: "permanently_delete_item",
+            targetType: result.itemType,
+            targetId: result.originalId,
+            details: {
+                name: result.itemRefName,
+                itemType: result.itemType,
+                binItemId: id,
+                type: "hard_delete"
+            }
+        });
 
         res.json({ message: "Item permanently deleted" });
     } catch (error) {

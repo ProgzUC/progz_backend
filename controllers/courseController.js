@@ -2,6 +2,14 @@ import Course from "../models/Course.js";
 import CourseVersion from "../models/CourseVersion.js";
 import RecycleBin from "../models/RecycleBin.js";
 import User from "../models/User.js";
+import {
+  isAdmin,
+  canManageCourse,
+  canManageBatch,
+  denyAccess,
+  getUserId,
+} from "../utils/authorizationHelpers.js";
+import { logAuditAction } from "../utils/auditLogger.js";
 
 // @desc    Create a new course
 // @route   POST /api/courses
@@ -34,6 +42,17 @@ export const createCourse = async (req, res) => {
       thumbnail
     });
 
+    await logAuditAction({
+      req,
+      action: "create_course",
+      targetType: "Course",
+      targetId: course._id,
+      details: {
+        courseName: course.courseName,
+        courseId: course.courseId
+      }
+    });
+
     res.status(201).json(course);
   } catch (error) {
     console.error("Error creating course:", error);
@@ -46,7 +65,9 @@ export const createCourse = async (req, res) => {
 // @access  Private
 export const getAllCourses = async (req, res) => {
   try {
-    const courses = await Course.find({})
+    const query = isAdmin(req) ? {} : { instructor: getUserId(req) };
+
+    const courses = await Course.find(query)
       .populate("instructor", "name email")
       .lean();
 
@@ -99,6 +120,10 @@ export const getCourse = async (req, res) => {
       return res.status(404).json({ message: "Course not found" });
     }
 
+    if (!canManageCourse(req, course)) {
+      return denyAccess(res, "You do not have access to this course");
+    }
+
     res.json(course);
   } catch (error) {
     console.error("Error fetching course:", error);
@@ -120,8 +145,9 @@ export const deleteCourse = async (req, res) => {
       return res.status(404).json({ message: "Course not found" });
     }
 
-    // Optional: Check if the user is the instructor or admin
-    // For now, assuming authorized roles from middleware are sufficient
+    if (!canManageCourse(req, course)) {
+      return denyAccess(res, "You do not have permission to delete this course");
+    }
 
     // Move to Recycle Bin
     await RecycleBin.create({
@@ -133,6 +159,18 @@ export const deleteCourse = async (req, res) => {
     });
 
     await course.deleteOne();
+
+    await logAuditAction({
+      req,
+      action: "delete_course",
+      targetType: "Course",
+      targetId: course._id,
+      details: {
+        courseName: course.courseName,
+        courseId: course.courseId,
+        type: "soft_delete"
+      }
+    });
 
     res.json({ message: "Course moved to recycle bin" });
   } catch (error) {
@@ -160,12 +198,27 @@ export const addInstructor = async (req, res) => {
       return res.status(404).json({ message: "Course not found" });
     }
 
+    if (!canManageCourse(req, course)) {
+      return denyAccess(res, "You do not have permission to modify instructors for this course");
+    }
+
     if (course.instructor.includes(instructorId)) {
       return res.status(400).json({ message: "Instructor already added" });
     }
 
     course.instructor.push(instructorId);
     await course.save();
+
+    await logAuditAction({
+      req,
+      action: "add_course_instructor",
+      targetType: "Course",
+      targetId: course._id,
+      details: {
+        courseName: course.courseName,
+        instructorId
+      }
+    });
 
     res.json(course);
   } catch (error) {
@@ -190,10 +243,25 @@ export const removeInstructor = async (req, res) => {
       return res.status(404).json({ message: "Course not found" });
     }
 
+    if (!canManageCourse(req, course)) {
+      return denyAccess(res, "You do not have permission to modify instructors for this course");
+    }
+
     course.instructor = course.instructor.filter(
       (id) => id.toString() !== instructorId
     );
     await course.save();
+
+    await logAuditAction({
+      req,
+      action: "remove_course_instructor",
+      targetType: "Course",
+      targetId: course._id,
+      details: {
+        courseName: course.courseName,
+        instructorId
+      }
+    });
 
     res.json(course);
   } catch (error) {
@@ -218,8 +286,23 @@ export const updateInstructors = async (req, res) => {
       return res.status(404).json({ message: "Course not found" });
     }
 
+    if (!canManageCourse(req, course)) {
+      return denyAccess(res, "You do not have permission to modify instructors for this course");
+    }
+
     course.instructor = instructorIds;
     await course.save();
+
+    await logAuditAction({
+      req,
+      action: "update_course_instructors",
+      targetType: "Course",
+      targetId: course._id,
+      details: {
+        courseName: course.courseName,
+        instructors: instructorIds
+      }
+    });
 
     res.json(course);
   } catch (error) {
@@ -239,6 +322,10 @@ export const updateCourse = async (req, res) => {
     const course = await Course.findById(courseId);
     if (!course) {
       return res.status(404).json({ message: "Course not found" });
+    }
+
+    if (!canManageCourse(req, course)) {
+      return denyAccess(res, "You do not have permission to update this course");
     }
 
     // 1. Create Snapshot of CURRENT state before update
@@ -280,6 +367,18 @@ export const updateCourse = async (req, res) => {
 
     await course.save();
 
+    await logAuditAction({
+      req,
+      action: "update_course",
+      targetType: "Course",
+      targetId: course._id,
+      details: {
+        courseName: course.courseName,
+        courseId: course.courseId,
+        updates
+      }
+    });
+
     res.json(course);
   } catch (error) {
     console.error("Error updating course:", error);
@@ -298,6 +397,15 @@ export const updateCourse = async (req, res) => {
 // @access  Private
 export const getCourseVersions = async (req, res) => {
   try {
+    const course = await Course.findById(req.params.id).select("_id instructor");
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+
+    if (!canManageCourse(req, course)) {
+      return denyAccess(res, "You do not have access to this course");
+    }
+
     const versions = await CourseVersion.find({ courseRef: req.params.id })
       .sort({ versionNumber: -1 })
       .select("versionNumber snapshotDate courseName"); // Basic info list
@@ -319,6 +427,10 @@ export const rollbackCourse = async (req, res) => {
 
     const course = await Course.findById(id);
     if (!course) return res.status(404).json({ message: "Course not found" });
+
+    if (!canManageCourse(req, course)) {
+      return denyAccess(res, "You do not have permission to rollback this course");
+    }
 
     const targetVersion = await CourseVersion.findById(versionId);
     if (!targetVersion) return res.status(404).json({ message: "Version not found" });
@@ -363,6 +475,18 @@ export const rollbackCourse = async (req, res) => {
     // Keeping enrolledStudents as is from CURRENT course.
 
     await course.save();
+
+    await logAuditAction({
+      req,
+      action: "rollback_course",
+      targetType: "Course",
+      targetId: course._id,
+      details: {
+        courseName: course.courseName,
+        versionId,
+        versionNumber: targetVersion.versionNumber
+      }
+    });
 
     res.json({ message: "Course rolled back successfully", course });
 

@@ -4,6 +4,7 @@ import {
     getAllBatches,
     getBatch,
     enrollStudent,
+    bulkEnrollStudents,
     removeStudent,
     manageTrainers,
     toggleSectionCompletion,
@@ -13,6 +14,7 @@ import {
 import { protect, authorizeRoles } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
+const staffRoles = authorizeRoles("admin", "trainer");
 
 /**
  * @swagger
@@ -41,8 +43,8 @@ const router = express.Router();
  *       200:
  *         description: List of batches
  */
-router.post("/", protect, authorizeRoles("admin", "trainer"), createBatch);
-router.get("/", protect, getAllBatches);
+router.post("/", protect, staffRoles, createBatch);
+router.get("/", protect, staffRoles, getAllBatches);
 
 /**
  * @swagger
@@ -90,7 +92,7 @@ router.get("/", protect, getAllBatches);
  *       200:
  *         description: Batch deleted
  */
-router.get("/:id", protect, getBatch);
+router.get("/:id", protect, staffRoles, getBatch);
 
 /**
  * @swagger
@@ -110,7 +112,8 @@ router.get("/:id", protect, getBatch);
  *       200:
  *         description: Student enrolled
  */
-router.post("/:id/enroll", protect, authorizeRoles("admin", "trainer"), enrollStudent);
+router.post("/:id/enroll", protect, staffRoles, enrollStudent);
+router.post("/:id/bulk-enroll", protect, staffRoles, bulkEnrollStudents);
 
 /**
  * @swagger
@@ -130,7 +133,7 @@ router.post("/:id/enroll", protect, authorizeRoles("admin", "trainer"), enrollSt
  *       200:
  *         description: Student removed
  */
-router.post("/:id/remove-student", protect, authorizeRoles("admin", "trainer"), removeStudent);
+router.post("/:id/remove-student", protect, staffRoles, removeStudent);
 
 /**
  * @swagger
@@ -150,7 +153,7 @@ router.post("/:id/remove-student", protect, authorizeRoles("admin", "trainer"), 
  *       200:
  *         description: Trainers updated
  */
-router.post("/:id/trainers", protect, authorizeRoles("admin", "trainer"), manageTrainers);
+router.post("/:id/trainers", protect, staffRoles, manageTrainers);
 
 /**
  * @swagger
@@ -170,8 +173,8 @@ router.post("/:id/trainers", protect, authorizeRoles("admin", "trainer"), manage
  *       200:
  *         description: Section completion toggled
  */
-router.post("/:id/sections/toggle", protect, authorizeRoles("admin", "trainer"), toggleSectionCompletion);
-router.delete("/:id", protect, authorizeRoles("admin", "trainer"), deleteBatch);
-router.put("/:id", protect, authorizeRoles("admin", "trainer"), updateBatch);
+router.post("/:id/sections/toggle", protect, staffRoles, toggleSectionCompletion);
+router.delete("/:id", protect, staffRoles, deleteBatch);
+router.put("/:id", protect, staffRoles, updateBatch);
 
 export default router;

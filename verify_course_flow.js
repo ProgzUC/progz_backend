@@ -1,13 +1,20 @@
 
-const BASE_URL = 'http://localhost:5000/api';
+import dotenv from "dotenv";
+dotenv.config();
+
+const BASE_URL = process.env.TEST_API_BASE_URL || "http://localhost:5002/api";
 
 const TRAINER_CREDENTIALS = {
-    email: "trainer@urbancode.com",
-    password: "Trainer@123"
+    email: process.env.TEST_TRAINER_EMAIL,
+    password: process.env.TEST_TRAINER_PASSWORD,
 };
 
 async function runVerification() {
     console.log("Starting Verification...");
+
+    if (!TRAINER_CREDENTIALS.email || !TRAINER_CREDENTIALS.password) {
+        throw new Error("TEST_TRAINER_EMAIL and TEST_TRAINER_PASSWORD are required.");
+    }
 
     // 1. Login
     console.log("1. Logging in...");

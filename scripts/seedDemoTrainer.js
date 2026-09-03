@@ -3,14 +3,15 @@ import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
 import connectDB from "../config/db.js";
 import User from "../models/User.js";
+import requireEnv from "./requireEnv.js";
 
 dotenv.config();
 
 async function main() {
   await connectDB();
 
-  const email = process.env.DEMO_TRAINER_EMAIL || "trainer@urbancode.com";
-  const passwordPlain = process.env.DEMO_TRAINER_PASSWORD || "Trainer@123";
+  const email = requireEnv("DEMO_TRAINER_EMAIL");
+  const passwordPlain = requireEnv("DEMO_TRAINER_PASSWORD");
 
   const existing = await User.findOne({ email }).lean();
   if (existing) {
@@ -37,7 +38,6 @@ async function main() {
   });
 
   console.log(`Demo trainer created: ${email}`);
-  console.log(`Password: ${passwordPlain}`);
 }
 
 main()
@@ -52,4 +52,3 @@ main()
       // ignore
     }
   });
-

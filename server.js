@@ -8,9 +8,6 @@ import swaggerUi from "swagger-ui-express";
 import swaggerSpec from "./config/swagger.js";
 import connectDB from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
-import createOrUpdateAdmin from "./utils/createOrUpdateAdmin.js";
-import bcrypt from "bcryptjs";
-import User from "./models/User.js";
 import trainerRoutes from "./routes/trainerRoutes.js";
 import courseRoutes from "./routes/courseRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
@@ -20,8 +17,23 @@ import batchRoutes from "./routes/batchRoutes.js";
 import studentRoutes from "./routes/studentRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import classSessionRoutes from "./routes/classSessionRoutes.js";
+import uploadRoutes from "./routes/uploadRoutes.js";
+import reportRoutes from "./routes/reportRoutes.js";
 import { initCronJobs } from "./jobs/cronJobs.js";
+import monitoringRoutes from "./routes/monitoringRoutes.js";
+import { requestLogger } from "./middlewares/loggingMiddleware.js";
+import { monitorMiddleware } from "./middlewares/monitorMiddleware.js";
+import { errorHandler, registerProcessErrorHandlers } from "./middlewares/errorMiddleware.js";
+
 dotenv.config();
+registerProcessErrorHandlers();
+
+const requiredEnvVars = ["JWT_SECRET", "REFRESH_TOKEN_SECRET"];
+const missingEnvVars = requiredEnvVars.filter((key) => !process.env[key]);
+if (missingEnvVars.length > 0) {
+  console.error(`Missing required environment variables: ${missingEnvVars.join(", ")}`);
+  process.exit(1);
+}
 
 connectDB();
 console.log("Environment: MONGO_URI", process.env.MONGO_URI ? "set" : "missing");
@@ -30,10 +42,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const allowedOrigins = [
-  "http://localhost:5173",
-  "https://progz.urbancode.in",
+  ...(process.env.CORS_ORIGINS || "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean),
   process.env.FRONTEND_URL,
 ].filter(Boolean);
+
+if (process.env.NODE_ENV !== "production") {
+  allowedOrigins.push("http://localhost:5173");
+}
 
 const app = express();
 app.use(
@@ -50,6 +68,8 @@ app.use(
 );
 app.use(cookieParser());
 app.use(express.json());
+app.use(monitorMiddleware);
+app.use(requestLogger);
 
 // Role-based docs (student / trainer / admin) from public/api-docs
 app.use(express.static(path.join(__dirname, "public")));
@@ -80,7 +100,10 @@ app.use("/api/sync", syncRoutes);
 app.use("/api/batches", batchRoutes);
 app.use("/api/student", studentRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/admin/reports", reportRoutes);
 app.use("/api/class-session", classSessionRoutes);
+app.use("/api/uploads", uploadRoutes);
+app.use("/api/admin/monitoring", monitoringRoutes);
 
 // Debug: Log that class session routes are loaded
 console.log("✅ Class session routes registered at /api/class-session");
@@ -90,65 +113,9 @@ app.get("/api/test", (req, res) => {
     res.json({ message: "Server is working", timestamp: new Date() });
 });
 
+app.use(errorHandler);
+
 initCronJobs();
-
-// const createDemoUsers = async () => {
-//   try {
-//     // ===== TRAINER =====
-//     const trainerEmail = "trainer@urbancode.com";
-
-//     const trainerExists = await User.findOne({ email: trainerEmail });
-
-//     if (!trainerExists) {
-//       const trainerPassword = await bcrypt.hash("Trainer@123", 10);
-
-//       await User.create({
-//         name: "Demo Trainer",
-//         email: trainerEmail,
-//         password: trainerPassword,
-//         phone: "9000000001",
-//         address: "Chennai",
-//         education: "MSc Computer Science",
-//         profession: "Trainer",
-//         experience: "5+ years",
-//         role: "trainer",
-//       });
-
-//       console.log("✅ Demo Trainer created");
-//     } else {
-//       console.log("ℹ️ Demo Trainer already exists");
-//     }
-
-//     // ===== STUDENT =====
-//     const studentEmail = "student@urbancode.com";
-
-//     const studentExists = await User.findOne({ email: studentEmail });
-
-//     if (!studentExists) {
-//       const studentPassword = await bcrypt.hash("Student@123", 10);
-
-//       await User.create({ 
-//         name: "Demo Student",
-//         email: studentEmail,
-//         password: studentPassword,
-//         phone: "9000000002",
-//         address: "Bangalore",
-//         education: "BSc Computer Science",
-//         university: "Anna University",
-//         employmentStatus: "Student",
-//         role: "student",
-//       });
-
-//       console.log("✅ Demo Student created");
-//     } else {
-//       console.log("ℹ️ Demo Student already exists");
-//     }
-
-//   } catch (error) {
-//     console.error("❌ Error creating demo users:", error.message);
-//   }
-// };
-// createDemoUsers();
 
 const PORT = process.env.PORT || 5002;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

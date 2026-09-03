@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
 import connectDB from "../config/db.js";
 import User from "../models/User.js";
+import requireEnv from "./requireEnv.js";
 
 dotenv.config();
 
@@ -32,7 +33,6 @@ async function upsertDemoUser(userInput) {
   });
 
   console.log(`${userInput.role} created: ${userInput.email}`);
-  console.log(`Password: ${userInput.passwordPlain}`);
 }
 
 async function main() {
@@ -41,8 +41,8 @@ async function main() {
   const users = [
     {
       name: process.env.DEMO_TRAINER_NAME || "Demo Trainer",
-      email: process.env.DEMO_TRAINER_EMAIL || "trainer@urbancode.com",
-      passwordPlain: process.env.DEMO_TRAINER_PASSWORD || "Trainer@123",
+      email: requireEnv("DEMO_TRAINER_EMAIL"),
+      passwordPlain: requireEnv("DEMO_TRAINER_PASSWORD"),
       phone: process.env.DEMO_TRAINER_PHONE || "9000000001",
       address: process.env.DEMO_TRAINER_ADDRESS || "Chennai",
       education: process.env.DEMO_TRAINER_EDUCATION || "MCA",
@@ -55,8 +55,8 @@ async function main() {
     },
     {
       name: process.env.DEMO_STUDENT_NAME || "Demo Student",
-      email: process.env.DEMO_STUDENT_EMAIL || "student@urbancode.com",
-      passwordPlain: process.env.DEMO_STUDENT_PASSWORD || "Student@123",
+      email: requireEnv("DEMO_STUDENT_EMAIL"),
+      passwordPlain: requireEnv("DEMO_STUDENT_PASSWORD"),
       phone: process.env.DEMO_STUDENT_PHONE || "9000000002",
       address: process.env.DEMO_STUDENT_ADDRESS || "Bangalore",
       education: process.env.DEMO_STUDENT_EDUCATION || "BSc Computer Science",
@@ -86,4 +86,3 @@ main()
       // ignore
     }
   });
-

@@ -6,7 +6,8 @@ import bcrypt from "bcryptjs";
 
 dotenv.config();
 
-const API_URL = "http://localhost:5000/api";
+const PORT = process.env.PORT || 5002;
+const API_URL = `http://localhost:${PORT}/api`;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
