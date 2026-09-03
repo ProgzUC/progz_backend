@@ -47,21 +47,30 @@ const allowedOrigins = [
     .map((origin) => origin.trim())
     .filter(Boolean),
   process.env.FRONTEND_URL,
-].filter(Boolean);
-
-if (process.env.NODE_ENV !== "production") {
-  allowedOrigins.push("http://localhost:5173");
-}
+  "https://progz.urbancode.in",
+  "https://www.progz.urbancode.in",
+  "http://localhost:5173",
+]
+  .filter(Boolean)
+  .map((origin) => origin.replace(/\/$/, ""));
 
 const app = express();
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error(`CORS blocked for origin: ${origin}`));
+      // Same-origin / server-to-server / proxied requests may omit Origin
+      if (!origin) {
+        return callback(null, true);
       }
+
+      const normalized = origin.replace(/\/$/, "");
+      if (allowedOrigins.includes(normalized)) {
+        return callback(null, true);
+      }
+
+      // Do not throw — throwing becomes a 500 without CORS headers
+      console.warn(`CORS rejected origin: ${origin}`);
+      return callback(null, false);
     },
     credentials: true,
   })
