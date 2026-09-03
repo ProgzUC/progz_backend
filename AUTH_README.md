@@ -17,7 +17,7 @@ This module handles user registration, login, and password management.
   {
     "name": "John Doe",
     "email": "john@example.com",
-    "password": "password123",
+    "password": "<your-password>",
     "role": "student" // optional, defaults to student
   }
   ```
@@ -30,7 +30,7 @@ This module handles user registration, login, and password management.
   ```json
   {
     "email": "john@example.com",
-    "password": "password123"
+    "password": "<your-password>"
   }
   ```
 - **Response**:
@@ -61,6 +61,6 @@ This module handles user registration, login, and password management.
 - **Body**:
   ```json
   {
-    "password": "newpassword123"
+    "password": "<new-password>"
   }
   ```

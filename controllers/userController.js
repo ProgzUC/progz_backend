@@ -8,6 +8,42 @@ import { logAuditAction } from "../utils/auditLogger.js";
 const SELF_REGISTER_ROLES = ["student", "trainer"];
 const ALL_ROLES = ["admin", "trainer", "student"];
 
+const PROFILE_FIELDS = [
+  "name",
+  "phone",
+  "altPhone",
+  "address",
+  "dob",
+  "gender",
+  "education",
+  "university",
+  "profession",
+  "employmentStatus",
+  "experience",
+  "skills",
+  "source",
+  "zenCourseName",
+  "zenCourseType",
+];
+
+const pickProfileFields = (body = {}) => {
+  const picked = {};
+  for (const field of PROFILE_FIELDS) {
+    if (body[field] !== undefined) picked[field] = body[field];
+  }
+  return picked;
+};
+
+const redactSensitiveUserData = (data = {}) => {
+  const clone = { ...data };
+  delete clone.password;
+  delete clone.refreshTokenHash;
+  delete clone.refreshTokenExpires;
+  delete clone.resetPasswordToken;
+  delete clone.resetPasswordExpires;
+  return clone;
+};
+
 const normalizeRegistrationRole = (role) => {
     const normalized = String(role || "student").toLowerCase();
     return SELF_REGISTER_ROLES.includes(normalized) ? normalized : null;
@@ -47,12 +83,14 @@ export const registerUser = async (req, res) => {
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Create PendingUser
+        // Create PendingUser with allowlisted fields only (no mass assignment)
         const newPendingUser = await PendingUser.create({
-            ...req.body,
+            ...pickProfileFields(req.body),
             email: normalizedEmail,
             password: hashedPassword,
             role: safeRole,
+            enrolledCourses: [],
+            status: "pending",
         });
 
         res.status(201).json({
@@ -104,10 +142,14 @@ export const adminCreateUser = async (req, res) => {
         }
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Extract and map all fields for User model
-        const userData = { ...req.body, email: normalizedEmail, role: normalizedRole };
-        delete userData.confirmPassword;
-        userData.password = hashedPassword;
+        // Allowlisted fields only — never spread req.body
+        const userData = {
+            ...pickProfileFields(req.body),
+            email: normalizedEmail,
+            role: normalizedRole,
+            password: hashedPassword,
+            enrolledCourses: [],
+        };
 
         // Save directly to User
         const newUser = await User.create(userData);
@@ -205,7 +247,9 @@ export const getAllUsers = async (req, res) => {
 // Admin: Get all pending users
 export const getAllPendingUsers = async (req, res) => {
     try {
-        const pendingUsers = await PendingUser.find().sort({ createdAt: -1 });
+        const pendingUsers = await PendingUser.find()
+            .sort({ createdAt: -1 })
+            .select("-password");
         res.status(200).json(pendingUsers);
     } catch (error) {
         res.status(500).json({ msg: error.message });
@@ -259,7 +303,7 @@ export const deleteUser = async (req, res) => {
         await RecycleBin.create({
             itemType: "User",
             originalId: user._id,
-            data: user.toObject(),
+            data: redactSensitiveUserData(user.toObject()),
             deletedBy: req.user.id,
             itemRefName: user.name || user.email
         });

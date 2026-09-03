@@ -32,12 +32,16 @@ Welcome to the Progz Backend API documentation. This project handles course mana
    ```
 
 2. **Environment Setup**
-   Ensure your `.env` file contains:
+   Copy `.env.example` to `.env` and fill in values (never commit `.env`):
    ```env
-   PORT=5001
+   PORT=5002
    MONGO_URI=...
    JWT_SECRET=...
-   API_KEY=... (For Zen Sync)
+   REFRESH_TOKEN_SECRET=...
+   ZEN_API_KEY=...          # Zen sync
+   CLOUDINARY_CLOUD_NAME=...
+   CLOUDINARY_API_KEY=...
+   CLOUDINARY_API_SECRET=...
    ```
 
 3. **Run Server**

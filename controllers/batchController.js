@@ -53,8 +53,8 @@ export const createBatch = async (req, res) => {
         }
 
         const trainerExists = await User.findById(t.trainer);
-        if (!trainerExists) {
-          return res.status(404).json({ msg: `Trainer not found: ${t.trainer}` });
+        if (!trainerExists || !["trainer", "instructor"].includes(String(trainerExists.role).toLowerCase())) {
+          return res.status(400).json({ msg: `User is not a valid trainer: ${t.trainer}` });
         }
       }
     }

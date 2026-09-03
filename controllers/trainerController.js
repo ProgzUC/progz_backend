@@ -6,6 +6,7 @@ import { getNextClassDate } from "../utils/getNextClassDate.js";
 import { validatePassword } from "../utils/passwordValidation.js";
 import { revokeRefreshToken } from "../utils/refreshTokenStore.js";
 import { clearAuthCookies } from "../utils/cookieAuth.js";
+import { canManageBatch, denyAccess } from "../utils/authorizationHelpers.js";
 
 export const trainerBootstrap = async (req, res) => {
   try {
@@ -265,6 +266,9 @@ export const updateTrainerprofile = async (req, res) => {
       "_id",
       "email",
       "role",
+      "enrolledCourses",
+      "refreshTokenHash",
+      "refreshTokenExpires",
       "resetPasswordToken",
       "resetPasswordExpires",
       "createdAt",
@@ -355,9 +359,12 @@ export const toggleSectionCompletion = async (req, res) => {
       return res.status(400).json({ message: "moduleIndex and sectionIndex must be valid integers" });
     }
 
-    // Load the batch document (don't gate on trainer assignment so offline/dev toggles work)
     const batch = await Batch.findById(batchId);
-    if (!batch) return res.status(404).json({ message: 'Batch not found' });
+    if (!batch) return res.status(404).json({ message: "Batch not found" });
+
+    if (!canManageBatch(req, batch)) {
+      return denyAccess(res, "You do not have permission to update section progress for this batch");
+    }
 
     // Find if progress entry exists
     const progressIndex = batch.sectionProgress.findIndex(

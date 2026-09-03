@@ -202,6 +202,11 @@ export const addInstructor = async (req, res) => {
       return denyAccess(res, "You do not have permission to modify instructors for this course");
     }
 
+    const instructorUser = await User.findById(instructorId).select("role");
+    if (!instructorUser || !["trainer", "instructor"].includes(String(instructorUser.role).toLowerCase())) {
+      return res.status(400).json({ message: "User is not a valid trainer" });
+    }
+
     if (course.instructor.includes(instructorId)) {
       return res.status(400).json({ message: "Instructor already added" });
     }
@@ -288,6 +293,16 @@ export const updateInstructors = async (req, res) => {
 
     if (!canManageCourse(req, course)) {
       return denyAccess(res, "You do not have permission to modify instructors for this course");
+    }
+
+    if (instructorIds.length > 0) {
+      const trainers = await User.find({
+        _id: { $in: instructorIds },
+        role: { $in: ["trainer", "instructor"] },
+      }).select("_id");
+      if (trainers.length !== instructorIds.length) {
+        return res.status(400).json({ message: "One or more users are not valid trainers" });
+      }
     }
 
     course.instructor = instructorIds;

@@ -47,10 +47,16 @@ const allowedOrigins = [
     .map((origin) => origin.trim())
     .filter(Boolean),
   process.env.FRONTEND_URL,
+  // Production frontend (safe default if env not set on Render)
   "https://progz.urbancode.in",
   "https://www.progz.urbancode.in",
-  "http://localhost:5173",
-]
+];
+
+if (process.env.NODE_ENV !== "production") {
+  allowedOrigins.push("http://localhost:5173");
+}
+
+const normalizedOrigins = allowedOrigins
   .filter(Boolean)
   .map((origin) => origin.replace(/\/$/, ""));
 
@@ -64,7 +70,7 @@ app.use(
       }
 
       const normalized = origin.replace(/\/$/, "");
-      if (allowedOrigins.includes(normalized)) {
+      if (normalizedOrigins.includes(normalized)) {
         return callback(null, true);
       }
 

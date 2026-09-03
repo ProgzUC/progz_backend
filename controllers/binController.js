@@ -9,8 +9,18 @@ import { logAuditAction } from "../utils/auditLogger.js";
 // @access  Private (Admin)
 export const getBinItems = async (req, res) => {
     try {
-        const items = await RecycleBin.find().sort({ createdAt: -1 });
-        res.json(items);
+        const items = await RecycleBin.find().sort({ createdAt: -1 }).lean();
+        const sanitized = items.map((item) => {
+            if (item.itemType !== "User" || !item.data) return item;
+            const data = { ...item.data };
+            delete data.password;
+            delete data.refreshTokenHash;
+            delete data.refreshTokenExpires;
+            delete data.resetPasswordToken;
+            delete data.resetPasswordExpires;
+            return { ...item, data };
+        });
+        res.json(sanitized);
     } catch (error) {
         res.status(500).json({ message: "Error fetching bin items", error: error.message });
     }

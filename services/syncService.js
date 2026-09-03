@@ -3,9 +3,15 @@ import PendingUser from "../models/PendingUser.js";
 import Course from "../models/Course.js";
 import apiClient from "./apiClient.js";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import SyncLog from "../models/SyncLog.js";
 import sendEmail from "../utils/sendEmail.js";
 import { logAuditAction } from "../utils/auditLogger.js";
+
+const randomUnusablePassword = async () => {
+    const raw = crypto.randomBytes(32).toString("hex");
+    return bcrypt.hash(raw, 10);
+};
 
 // Sync Instructors from Zen API
 export const syncInstructors = async () => {
@@ -52,8 +58,8 @@ export const syncInstructors = async () => {
                     continue;
                 }
 
-                // Create Pending User
-                const password = await bcrypt.hash('progz1234', 10);
+                // Create Pending User with unusable random password (admin must set password on approval)
+                const password = await randomUnusablePassword();
                 await PendingUser.create({
                     name: t.trainer_name,
                     email: email,
@@ -171,8 +177,8 @@ export const syncStudents = async () => {
                     continue;
                 }
 
-                // Create new Pending User
-                const password = await bcrypt.hash('student123', 10);
+                // Create new Pending User with unusable random password
+                const password = await randomUnusablePassword();
                 const enrolledCourses = [];
                 if (course) {
                     enrolledCourses.push({
@@ -309,7 +315,11 @@ export const runCompleteSync = async (triggerType = "scheduled", userId = null, 
 
 // Send SMTP email alert on sync failures
 const sendSyncFailureEmail = async (syncLog) => {
-    const adminEmail = process.env.ADMIN_EMAIL || "admin@urbancode.in";
+    const adminEmail = process.env.ADMIN_EMAIL;
+    if (!adminEmail) {
+        console.error("ADMIN_EMAIL is not set; skipping sync failure email");
+        return;
+    }
     const subject = `⚠️ Progz Alert: Zen CRM Sync Failed`;
     const html = `
         <div style="font-family: sans-serif; padding: 20px; max-width: 600px; border: 1px solid #e1e1e1; border-radius: 8px;">
