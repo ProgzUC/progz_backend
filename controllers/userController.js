@@ -4,6 +4,7 @@ import RecycleBin from "../models/RecycleBin.js";
 import bcrypt from "bcryptjs";
 import { validatePassword } from "../utils/passwordValidation.js";
 import { logAuditAction } from "../utils/auditLogger.js";
+import { sendError } from "../utils/apiError.js";
 
 const SELF_REGISTER_ROLES = ["student", "trainer"];
 const ALL_ROLES = ["admin", "trainer", "student"];
@@ -56,14 +57,14 @@ export const registerUser = async (req, res) => {
         const safeRole = normalizeRegistrationRole(role);
 
         if (!safeRole) {
-            return res.status(400).json({
-                msg: "Invalid role. Self-registration is allowed for student or trainer only.",
+            return sendError(res, 400, "Invalid role. Self-registration is allowed for student or trainer only.", {
+                code: "INVALID_ROLE",
             });
         }
 
         const passwordCheck = validatePassword(password);
         if (!passwordCheck.ok) {
-            return res.status(400).json({ msg: passwordCheck.message });
+            return sendError(res, 400, passwordCheck.message, { code: "INVALID_PASSWORD" });
         }
 
         const normalizedEmail = String(email || "").trim().toLowerCase();
@@ -71,13 +72,15 @@ export const registerUser = async (req, res) => {
         // Check if user exists in main User collection
         const existingUser = await User.findOne({ email: normalizedEmail });
         if (existingUser) {
-            return res.status(400).json({ msg: "Email already exists in active users" });
+            return sendError(res, 400, "Email already exists in active users", { code: "EMAIL_EXISTS" });
         }
 
         // Check if user exists in PendingUser collection
         const existingPending = await PendingUser.findOne({ email: normalizedEmail });
         if (existingPending) {
-            return res.status(400).json({ msg: "Registration request already pending for this email" });
+            return sendError(res, 400, "Registration request already pending for this email", {
+                code: "EMAIL_PENDING",
+            });
         }
 
         // Hash password

@@ -3,11 +3,13 @@ import dotenv from "dotenv";
 import PendingUser from "./models/PendingUser.js";
 import User from "./models/User.js";
 import bcrypt from "bcryptjs";
+import { getTestPassword } from "./scripts/testCredentials.js";
 
 dotenv.config();
 
 const PORT = process.env.PORT || 5002;
 const API_URL = `http://localhost:${PORT}/api`;
+const testUserPassword = getTestPassword("student");
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -78,7 +80,7 @@ const runVerification = async () => {
         const regRes = await post(`${API_URL}/users/register`, {
             name: "Pending Tester",
             email: testEmail,
-            password: "password123",
+            password: testUserPassword,
             phone: "1234567890",
             role: "student",
         });
@@ -134,7 +136,7 @@ const runVerification = async () => {
         await post(`${API_URL}/users/register`, {
             name: "Reject Tester",
             email: rejectEmail,
-            password: "password123",
+            password: testUserPassword,
             phone: "0987654321",
             role: "trainer",
         });

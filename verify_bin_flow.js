@@ -4,10 +4,12 @@ import Course from "./models/Course.js";
 import User from "./models/User.js";
 import RecycleBin from "./models/RecycleBin.js";
 import bcrypt from "bcryptjs";
+import { getTestPassword } from "./scripts/testCredentials.js";
 
 dotenv.config();
 
-const API_URL = "http://localhost:5000/api";
+const API_URL = process.env.TEST_API_BASE_URL || `http://localhost:${process.env.PORT || 5002}/api`;
+const studentPassword = getTestPassword("student");
 
 // Helper for fetch
 const post = async (url, data, token) => {
@@ -129,10 +131,11 @@ const runVerification = async () => {
         await User.findOneAndDelete({ email: userEmail }); // clean
 
         // Create directly in DB to skip pending flow for speed (we tested pending already)
+        const hashedStudentPassword = await bcrypt.hash(studentPassword, 10);
         const newUser = await User.create({
             name: "Bin Test User",
             email: userEmail,
-            password: "password",
+            password: hashedStudentPassword,
             role: "student",
             phone: "111",
             employmentStatus: "Student"

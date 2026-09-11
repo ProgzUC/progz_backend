@@ -1,7 +1,7 @@
 import User from "../models/User.js";
 import PendingUser from "../models/PendingUser.js";
 import Course from "../models/Course.js";
-import apiClient from "./apiClient.js";
+import apiClient, { isZenConfigured } from "./apiClient.js";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import SyncLog from "../models/SyncLog.js";
@@ -214,6 +214,10 @@ export const syncStudents = async () => {
 
 // Master execution wrapper that coordinates, logs, and alerts on fails
 export const runCompleteSync = async (triggerType = "scheduled", userId = null, req = null) => {
+    if (!isZenConfigured()) {
+        throw new Error("ZEN_API_BASE_URL is required for Zen sync operations.");
+    }
+
     const startTime = new Date();
     
     // 1. Initialize Sync Log
@@ -313,11 +317,15 @@ export const runCompleteSync = async (triggerType = "scheduled", userId = null, 
     }
 };
 
-// Send SMTP email alert on sync failures
+// Send email alert on sync failures (Brevo)
 const sendSyncFailureEmail = async (syncLog) => {
     const adminEmail = process.env.ADMIN_EMAIL;
     if (!adminEmail) {
-        console.error("ADMIN_EMAIL is not set; skipping sync failure email");
+        console.warn("ADMIN_EMAIL is not set; skipping sync failure email");
+        return;
+    }
+    if (!process.env.BREVO_API_KEY?.trim() || !process.env.FROM_EMAIL?.trim()) {
+        console.warn("BREVO_API_KEY / FROM_EMAIL not set; skipping sync failure email");
         return;
     }
     const subject = `⚠️ Progz Alert: Zen CRM Sync Failed`;
@@ -363,6 +371,9 @@ const sendSyncFailureEmail = async (syncLog) => {
         });
         console.log(`📩 Sync failure email notification sent to ${adminEmail}`);
     } catch (emailErr) {
-        console.error("❌ Failed to dispatch sync failure alert email:", emailErr.message);
+        console.error(
+            "❌ Failed to dispatch sync failure alert email:",
+            emailErr?.message || emailErr
+        );
     }
 };

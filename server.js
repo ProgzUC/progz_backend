@@ -24,6 +24,8 @@ import monitoringRoutes from "./routes/monitoringRoutes.js";
 import { requestLogger } from "./middlewares/loggingMiddleware.js";
 import { monitorMiddleware } from "./middlewares/monitorMiddleware.js";
 import { errorHandler, registerProcessErrorHandlers } from "./middlewares/errorMiddleware.js";
+import { globalApiRateLimit } from "./middlewares/rateLimit.js";
+import createOrUpdateAdmin from "./utils/createOrUpdateAdmin.js";
 
 dotenv.config();
 registerProcessErrorHandlers();
@@ -61,6 +63,10 @@ const normalizedOrigins = allowedOrigins
   .map((origin) => origin.replace(/\/$/, ""));
 
 const app = express();
+
+// Needed so rate limiting sees the real client IP behind Render / proxies
+app.set("trust proxy", 1);
+
 app.use(
   cors({
     origin(origin, callback) {
@@ -82,7 +88,12 @@ app.use(
   })
 );
 app.use(cookieParser());
-app.use(express.json());
+
+const jsonBodyLimit = process.env.JSON_BODY_LIMIT || "512kb";
+app.use(express.json({ limit: jsonBodyLimit }));
+app.use(express.urlencoded({ extended: false, limit: jsonBodyLimit }));
+app.use(globalApiRateLimit);
+
 app.use(monitorMiddleware);
 app.use(requestLogger);
 
@@ -104,7 +115,7 @@ app.get("/ping", (req, res) => {
   });
 });
 
-// createOrUpdateAdmin();
+createOrUpdateAdmin();
 app.use("/api/auth", authRoutes);
 app.use("/auth", authRoutes); // compatibility alias for clients using /auth/login directly
 app.use("/api/trainer", trainerRoutes)

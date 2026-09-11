@@ -1,16 +1,30 @@
 import Course from "../models/Course.js";
 import User from "../models/User.js";
 import Batch from "../models/Batch.js";
+import PendingUser from "../models/PendingUser.js";
 
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 export const getAdminStats = async (req, res) => {
   try {
-    const courses = await Course.countDocuments();
-    const instructors = await User.countDocuments({ role: 'trainer' });
-    const students = await User.countDocuments({ role: 'student' });
+    const [courses, instructors, students, batches, pending] = await Promise.all([
+      Course.countDocuments(),
+      User.countDocuments({ role: "trainer" }),
+      User.countDocuments({ role: "student" }),
+      Batch.countDocuments(),
+      PendingUser.countDocuments(),
+    ]);
 
-    res.json({ courses, instructors, students });
+    res.json({
+      courses,
+      instructors,
+      students,
+      batches,
+      totalBatches: batches,
+      pendingApprovals: pending,
+      pending,
+      totalUsers: instructors + students,
+    });
   } catch (err) {
     console.error('getAdminStats error', err);
     res.status(500).json({ message: 'Failed to fetch stats' });

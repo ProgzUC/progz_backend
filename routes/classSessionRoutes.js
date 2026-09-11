@@ -9,6 +9,7 @@ import {
     getStudentAttendance,
     getBatchAttendanceReport,
 } from "../controllers/classSessionController.js";
+import { submissionRateLimit } from "../middlewares/rateLimit.js";
 
 console.log("🔧 Loading classSessionRoutes.js");
 
@@ -58,7 +59,7 @@ router.get("/health", (req, res) => {
  *       201:
  *         description: Class session started
  */
-router.post("/start", protect, authorizeRoles("trainer"), startClass);
+router.post("/start", protect, authorizeRoles("trainer"), submissionRateLimit, startClass);
 
 /**
  * @swagger

@@ -4,6 +4,8 @@ import dotenv from "dotenv";
 import User from "./models/User.js";
 import PendingUser from "./models/PendingUser.js";
 import { approveUser } from "./controllers/userController.js";
+import bcrypt from "bcryptjs";
+import { getTestPassword } from "./scripts/testCredentials.js";
 
 dotenv.config();
 
@@ -13,13 +15,14 @@ const verifySchema = async () => {
         console.log("✅ Connected to MongoDB");
 
         const testEmail = `test_schema_${Date.now()}@example.com`;
+        const hashedPassword = await bcrypt.hash(getTestPassword("student"), 10);
 
         // 1. Create PendingUser with NEW fields
         console.log("1️⃣ Creating PendingUser with new fields...");
         const pending = await PendingUser.create({
             name: "Test User",
             email: testEmail,
-            password: "hashedpassword123",
+            password: hashedPassword,
             phone: "1234567890",
             altPhone: "0987654321",
             address: "123 Test St",

@@ -1,5 +1,6 @@
 import cron from "node-cron";
 import { runCompleteSync } from "../services/syncService.js";
+import { isZenConfigured } from "../services/apiClient.js";
 import metricsTracker from "../utils/metricsTracker.js";
 import SystemMetric from "../models/SystemMetric.js";
 
@@ -44,8 +45,12 @@ export const initCronJobs = () => {
     // Seed dummy data if needed
     seedHistoricalMetricsIfEmpty();
 
-    // Run every 30 minutes
+    // Run every 30 minutes (skip when Zen API is not configured)
     cron.schedule('*/30 * * * *', async () => {
+        if (!isZenConfigured()) {
+            console.log('⏭️  Skipping scheduled sync: ZEN_API_BASE_URL is not set');
+            return;
+        }
         console.log('⏳ Running scheduled sync...');
         try {
             await runCompleteSync("scheduled");

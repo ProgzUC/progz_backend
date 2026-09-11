@@ -1,6 +1,8 @@
 import express from "express";
 import { registerUser, adminCreateUser, approveUser, getAllPendingUsers, rejectUser, deleteUser, updateUser, getUser, getAllUsers } from "../controllers/userController.js";
 import { protect, authorizeRoles } from "../middlewares/authMiddleware.js";
+import { registrationRateLimit, submissionRateLimit } from "../middlewares/rateLimit.js";
+import { validate, registerUserSchema } from "../middlewares/validate.js";
 
 const router = express.Router();
 
@@ -23,7 +25,12 @@ const router = express.Router();
  *         description: Registration request created
  */
 // Public route to register (creates a pending request)
-router.post("/register", registerUser);
+router.post(
+  "/register",
+  registrationRateLimit,
+  validate(registerUserSchema),
+  registerUser
+);
 
 /**
  * @swagger
@@ -38,7 +45,13 @@ router.post("/register", registerUser);
  *         description: User created
  */
 // Admin-protected routes
-router.post("/admin-create", protect, authorizeRoles("admin"), adminCreateUser);
+router.post(
+  "/admin-create",
+  protect,
+  authorizeRoles("admin"),
+  submissionRateLimit,
+  adminCreateUser
+);
 
 /**
  * @swagger

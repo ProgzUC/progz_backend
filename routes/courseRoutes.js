@@ -12,6 +12,7 @@ import {
     rollbackCourse,
 } from "../controllers/courseController.js";
 import { protect, authorizeRoles } from "../middlewares/authMiddleware.js";
+import { submissionRateLimit } from "../middlewares/rateLimit.js";
 
 const router = express.Router();
 const staffRoles = authorizeRoles("admin", "trainer");
@@ -45,7 +46,7 @@ const staffRoles = authorizeRoles("admin", "trainer");
  */
 router
     .route("/")
-    .post(protect, staffRoles, createCourse)
+    .post(protect, staffRoles, submissionRateLimit, createCourse)
     .get(protect, staffRoles, getAllCourses);
 
 /**

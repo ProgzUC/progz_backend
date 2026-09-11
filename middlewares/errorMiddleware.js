@@ -1,11 +1,13 @@
 import ErrorLog from "../models/ErrorLog.js";
 import logger from "../utils/logger.js";
+import { buildErrorBody, normalizeError } from "../utils/apiError.js";
 
 // Global error handling middleware for Express
 export const errorHandler = async (err, req, res, next) => {
-  const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
-  const message = err.message || "An unexpected server error occurred";
-  
+  const normalized = normalizeError(err);
+  const statusCode = normalized.statusCode || 500;
+  const message = normalized.message || "An unexpected server error occurred";
+
   // Extract user details if logged in
   let userId = null;
   let userRole = null;
@@ -18,36 +20,55 @@ export const errorHandler = async (err, req, res, next) => {
   const url = req.originalUrl;
   const ipAddress = req.ip || req.headers["x-forwarded-for"];
 
-  // Log error using Winston (structured)
-  logger.error(`Error handling ${method} ${url}: ${message}`, {
-    stack: err.stack,
-    userId,
-    userRole,
-    ipAddress,
-    method,
-    url,
-  });
-
-  // Save error trace to MongoDB
-  try {
-    await ErrorLog.create({
-      message,
+  // Log server errors (and unexpected failures) with Winston
+  if (statusCode >= 500) {
+    logger.error(`Error handling ${method} ${url}: ${message}`, {
       stack: err.stack,
-      method,
-      url,
       userId,
       userRole,
       ipAddress,
+      method,
+      url,
+      code: normalized.code,
     });
-  } catch (dbErr) {
-    logger.error("Failed to save error to database:", dbErr);
+
+    try {
+      await ErrorLog.create({
+        message,
+        stack: err.stack,
+        method,
+        url,
+        userId,
+        userRole,
+        ipAddress,
+      });
+    } catch (dbErr) {
+      logger.error("Failed to save error to database:", dbErr);
+    }
+  } else {
+    logger.warn(`Client error ${method} ${url}: ${message}`, {
+      statusCode,
+      code: normalized.code,
+      userId,
+      ipAddress,
+    });
   }
 
-  // Send JSON response to client
-  res.status(statusCode).json({
-    msg: message,
-    stack: process.env.NODE_ENV === "production" ? undefined : err.stack,
+  if (normalized.retryAfter != null) {
+    res.set("Retry-After", String(normalized.retryAfter));
+  }
+
+  const body = buildErrorBody(message, {
+    code: normalized.code,
+    errors: normalized.errors,
+    retryAfter: normalized.retryAfter,
   });
+
+  if (process.env.NODE_ENV !== "production" && statusCode >= 500) {
+    body.stack = err.stack;
+  }
+
+  res.status(statusCode).json(body);
 };
 
 // Catch-all for uncaught exceptions and unhandled rejections

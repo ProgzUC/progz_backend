@@ -5,10 +5,13 @@ dotenv.config();
 
 let client;
 
+export const isZenConfigured = () =>
+  Boolean(process.env.ZEN_API_BASE_URL?.trim());
+
 const getApiClient = () => {
   if (client) return client;
 
-  const baseURL = process.env.ZEN_API_BASE_URL;
+  const baseURL = process.env.ZEN_API_BASE_URL?.trim();
   if (!baseURL) {
     throw new Error("ZEN_API_BASE_URL is required for Zen sync operations.");
   }

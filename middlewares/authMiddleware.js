@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import { ACCESS_TOKEN_COOKIE } from "../utils/cookieAuth.js";
 import { normalizeRole } from "../utils/authorizationHelpers.js";
+import { sendError } from "../utils/apiError.js";
 
 const extractAccessToken = (req) => {
   const authHeader = req.headers.authorization;
@@ -17,12 +18,12 @@ const extractAccessToken = (req) => {
 export const protect = async (req, res, next) => {
   try {
     const token = extractAccessToken(req);
-    if (!token) return res.status(401).json({ msg: "No token provided" });
+    if (!token) return sendError(res, 401, "No token provided", { code: "NO_TOKEN" });
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.id).select("_id role email name");
     if (!user) {
-      return res.status(401).json({ msg: "User not found or deactivated" });
+      return sendError(res, 401, "User not found or deactivated", { code: "USER_NOT_FOUND" });
     }
 
     // Prefer live DB role over JWT claim (handles demotion / role change)
@@ -37,9 +38,9 @@ export const protect = async (req, res, next) => {
   } catch (error) {
     console.error("🔒 Auth protect error:", error.name, error.message);
     if (error.name === "TokenExpiredError") {
-      return res.status(401).json({ msg: "Token expired", code: "TOKEN_EXPIRED" });
+      return sendError(res, 401, "Token expired", { code: "TOKEN_EXPIRED" });
     }
-    res.status(401).json({ msg: "Invalid token" });
+    return sendError(res, 401, "Invalid token", { code: "INVALID_TOKEN" });
   }
 };
 
@@ -52,7 +53,7 @@ export const authorizeRoles = (...roles) => {
       console.error(
         `🔒 Authorize roles failed: user role '${req.user?.role}' not in required roles [${roles.join(", ")}]`
       );
-      return res.status(403).json({ msg: "Access denied" });
+      return sendError(res, 403, "Access denied", { code: "FORBIDDEN" });
     }
 
     next();

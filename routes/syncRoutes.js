@@ -6,6 +6,7 @@ import {
   getSyncStatus
 } from "../controllers/syncController.js";
 import { protect, authorizeRoles } from "../middlewares/authMiddleware.js";
+import { submissionRateLimit } from "../middlewares/rateLimit.js";
 
 const router = express.Router();
 
@@ -14,7 +15,7 @@ router.use(protect);
 router.use(authorizeRoles("admin"));
 
 // Sync Action Endpoints
-router.post("/manual", triggerSync);
+router.post("/manual", submissionRateLimit, triggerSync);
 router.get("/trainers", getZenTrainers);
 
 // Sync Telemetry Endpoints

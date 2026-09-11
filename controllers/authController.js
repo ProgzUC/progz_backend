@@ -23,6 +23,7 @@ import {
   clearLoginFailures,
   recordLoginFailure,
 } from "../middlewares/loginRateLimit.js";
+import { sendError } from "../utils/apiError.js";
 
 const buildAuthUser = (user) => ({
   id: user._id,
@@ -50,9 +51,12 @@ const issueAuthSession = async (res, user) => {
 };
 
 export const register = async (_req, res) => {
-  return res.status(403).json({
-    msg: "Direct registration is disabled. Use /api/users/register and wait for admin approval.",
-  });
+  return sendError(
+    res,
+    403,
+    "Direct registration is disabled. Use /api/users/register and wait for admin approval.",
+    { code: "REGISTRATION_DISABLED" }
+  );
 };
 
 export const login = async (req, res) => {
@@ -63,13 +67,13 @@ export const login = async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) {
       recordLoginFailure(rateLimitKey);
-      return res.status(401).json({ msg: "Invalid email or password" });
+      return sendError(res, 401, "Invalid email or password", { code: "INVALID_CREDENTIALS" });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       recordLoginFailure(rateLimitKey);
-      return res.status(401).json({ msg: "Invalid email or password" });
+      return sendError(res, 401, "Invalid email or password", { code: "INVALID_CREDENTIALS" });
     }
 
     const sessionData = await issueAuthSession(res, user);

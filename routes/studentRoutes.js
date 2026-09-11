@@ -2,6 +2,8 @@ import { Router } from "express";
 const router = Router();
 import { protect, authorizeRoles } from "../middlewares/authMiddleware.js";
 import { getStudentProfile, updateStudentProfile, changePassword, getStudentCourses, getCourseProgress } from "../controllers/studentController.js";
+import { submissionRateLimit } from "../middlewares/rateLimit.js";
+import { validate, changePasswordSchema } from "../middlewares/validate.js";
 
 /**
  * @swagger
@@ -32,7 +34,13 @@ import { getStudentProfile, updateStudentProfile, changePassword, getStudentCour
  */
 // Profile routes
 router.get("/profile", protect, authorizeRoles("student"), getStudentProfile);
-router.put("/profile", protect, authorizeRoles("student"), updateStudentProfile);
+router.put(
+  "/profile",
+  protect,
+  authorizeRoles("student"),
+  submissionRateLimit,
+  updateStudentProfile
+);
 
 /**
  * @swagger
@@ -46,7 +54,14 @@ router.put("/profile", protect, authorizeRoles("student"), updateStudentProfile)
  *       200:
  *         description: Password changed
  */
-router.post("/change-password", protect, authorizeRoles("student"), changePassword);
+router.post(
+  "/change-password",
+  protect,
+  authorizeRoles("student"),
+  submissionRateLimit,
+  validate(changePasswordSchema),
+  changePassword
+);
 
 /**
  * @swagger

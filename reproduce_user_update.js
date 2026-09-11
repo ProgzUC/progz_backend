@@ -2,6 +2,8 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 import User from "./models/User.js";
 import { updateUser } from "./controllers/userController.js";
+import bcrypt from "bcryptjs";
+import { getTestPassword } from "./scripts/testCredentials.js";
 
 dotenv.config();
 
@@ -10,11 +12,14 @@ const reproduceIssue = async () => {
         await mongoose.connect(process.env.MONGO_URI);
         console.log("✅ Connected to MongoDB");
 
+        const hashedAdminPassword = await bcrypt.hash(getTestPassword("admin"), 10);
+        const hashedStudentPassword = await bcrypt.hash(getTestPassword("student"), 10);
+
         // 1. Create a Test Admin User
         const adminUser = await User.create({
             name: "Test Admin",
             email: `admin_${Date.now()}@example.com`,
-            password: "password",
+            password: hashedAdminPassword,
             role: "admin",
             phone: "1111111111"
         });
@@ -24,7 +29,7 @@ const reproduceIssue = async () => {
         const targetUser = await User.create({
             name: "Target User",
             email: `target_${Date.now()}@example.com`,
-            password: "password",
+            password: hashedStudentPassword,
             role: "student",
             phone: "2222222222",
             education: "Old Education"

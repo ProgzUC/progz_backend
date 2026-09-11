@@ -12,6 +12,7 @@ import {
     updateBatch
 } from "../controllers/batchController.js";
 import { protect, authorizeRoles } from "../middlewares/authMiddleware.js";
+import { submissionRateLimit } from "../middlewares/rateLimit.js";
 
 const router = express.Router();
 const staffRoles = authorizeRoles("admin", "trainer");
@@ -43,7 +44,7 @@ const staffRoles = authorizeRoles("admin", "trainer");
  *       200:
  *         description: List of batches
  */
-router.post("/", protect, staffRoles, createBatch);
+router.post("/", protect, staffRoles, submissionRateLimit, createBatch);
 router.get("/", protect, staffRoles, getAllBatches);
 
 /**
@@ -112,8 +113,8 @@ router.get("/:id", protect, staffRoles, getBatch);
  *       200:
  *         description: Student enrolled
  */
-router.post("/:id/enroll", protect, staffRoles, enrollStudent);
-router.post("/:id/bulk-enroll", protect, staffRoles, bulkEnrollStudents);
+router.post("/:id/enroll", protect, staffRoles, submissionRateLimit, enrollStudent);
+router.post("/:id/bulk-enroll", protect, staffRoles, submissionRateLimit, bulkEnrollStudents);
 
 /**
  * @swagger
@@ -133,7 +134,7 @@ router.post("/:id/bulk-enroll", protect, staffRoles, bulkEnrollStudents);
  *       200:
  *         description: Student removed
  */
-router.post("/:id/remove-student", protect, staffRoles, removeStudent);
+router.post("/:id/remove-student", protect, staffRoles, submissionRateLimit, removeStudent);
 
 /**
  * @swagger

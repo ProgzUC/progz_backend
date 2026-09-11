@@ -2,10 +2,12 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 import User from "./models/User.js";
 import bcrypt from "bcryptjs";
+import { getTestPassword } from "./scripts/testCredentials.js";
 
 dotenv.config();
 
-const API_URL = "http://localhost:5000/api";
+const API_URL = process.env.TEST_API_BASE_URL || `http://localhost:${process.env.PORT || 5002}/api`;
+const studentPassword = getTestPassword("student");
 
 const post = async (url, data, token) => {
     const headers = { "Content-Type": "application/json" };
@@ -47,14 +49,14 @@ const runVerification = async () => {
         const student2Email = "viewtest2@example.com";
         await User.deleteMany({ email: { $in: [student1Email, student2Email] } });
 
-        const pwd = await bcrypt.hash("password", 10);
+        const pwd = await bcrypt.hash(studentPassword, 10);
         const s1 = await User.create({ name: "Student One", email: student1Email, password: pwd, role: "student", phone: "111" });
         const s2 = await User.create({ name: "Student Two", email: student2Email, password: pwd, role: "student", phone: "222" });
         console.log("Created test students:", s1._id, s2._id);
 
         // Login Student 1
         console.log("\n--- Logging in as Student 1 ---");
-        const s1Login = await post(`${API_URL}/auth/login`, { email: student1Email, password: "password" });
+        const s1Login = await post(`${API_URL}/auth/login`, { email: student1Email, password: studentPassword });
         const s1Token = s1Login.data.accessToken;
 
         // 1. Student 1 Views Self (Pass)

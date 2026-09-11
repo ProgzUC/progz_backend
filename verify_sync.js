@@ -3,10 +3,12 @@ import dotenv from "dotenv";
 import User from "./models/User.js";
 import PendingUser from "./models/PendingUser.js";
 import bcrypt from "bcryptjs";
+import { getTestPassword } from "./scripts/testCredentials.js";
 
 dotenv.config();
 
-const API_URL = "http://localhost:5001/api";
+const API_URL = process.env.TEST_API_BASE_URL || `http://localhost:${process.env.PORT || 5002}/api`;
+const studentPassword = getTestPassword("student");
 
 const post = async (url, data, token) => {
     const headers = { "Content-Type": "application/json" };
@@ -39,8 +41,9 @@ const runVerification = async () => {
         // Create Student
         const studentEmail = "synctest@example.com";
         await User.findOneAndDelete({ email: studentEmail });
-        await User.create({ name: "Sync Student", email: studentEmail, password: "password", role: "student", phone: "000" });
-        const studentLogin = await post(`${API_URL}/auth/login`, { email: studentEmail, password: "password" });
+        const hashedStudentPassword = await bcrypt.hash(studentPassword, 10);
+        await User.create({ name: "Sync Student", email: studentEmail, password: hashedStudentPassword, role: "student", phone: "000" });
+        const studentLogin = await post(`${API_URL}/auth/login`, { email: studentEmail, password: studentPassword });
         const studentToken = studentLogin.data.accessToken;
 
         // 1. Student Triggers Sync (Fail)

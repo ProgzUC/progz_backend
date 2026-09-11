@@ -1,3 +1,6 @@
+import { sendError } from "../utils/apiError.js";
+import { getClientIp } from "./rateLimit.js";
+
 const MAX_ATTEMPTS = Number(process.env.LOGIN_MAX_ATTEMPTS || 5);
 const WINDOW_MS = Number(process.env.LOGIN_WINDOW_MS || 10 * 60 * 1000);
 const LOCK_MS = Number(process.env.LOGIN_LOCK_MS || 15 * 60 * 1000);
@@ -5,15 +8,8 @@ const LOCK_MS = Number(process.env.LOGIN_LOCK_MS || 15 * 60 * 1000);
 const attempts = new Map();
 
 const getClientKey = (req) => {
-  const forwardedFor = req.headers["x-forwarded-for"];
-  const rawIp =
-    (Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor?.split(",")[0]) ||
-    req.ip ||
-    req.socket?.remoteAddress ||
-    "unknown";
   const email = String(req.body?.email || "").trim().toLowerCase();
-
-  return `${rawIp}:${email}`;
+  return `${getClientIp(req)}:${email}`;
 };
 
 const getRetryAfterSeconds = (until) => {
@@ -33,9 +29,8 @@ export const loginRateLimit = (req, res, next) => {
 
   if (record.lockedUntil && record.lockedUntil > now) {
     const retryAfter = getRetryAfterSeconds(record.lockedUntil);
-    res.set("Retry-After", String(retryAfter));
-    return res.status(429).json({
-      msg: "Too many login attempts. Try again later.",
+    return sendError(res, 429, "Too many login attempts. Try again later.", {
+      code: "LOGIN_RATE_LIMITED",
       retryAfter,
     });
   }

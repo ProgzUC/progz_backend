@@ -198,7 +198,10 @@ export const enrollStudent = async (req, res) => {
         if (!student) return res.status(404).json({ msg: "Student not found" });
 
         // Add to batch students array if not already there
-        if (!batch.students.includes(studentId)) {
+        const alreadyInBatch = batch.students.some(
+            (id) => String(id) === String(studentId)
+        );
+        if (!alreadyInBatch) {
             batch.students.push(studentId);
             await batch.save();
         }
@@ -589,7 +592,10 @@ export const bulkEnrollStudents = async (req, res) => {
                 const student = await User.findById(sId);
                 if (!student) continue;
 
-                if (!batch.students.includes(sId)) {
+                const alreadyInBatch = batch.students.some(
+                    (id) => String(id) === String(sId)
+                );
+                if (!alreadyInBatch) {
                     batch.students.push(sId);
                     enrolledCount++;
                 }

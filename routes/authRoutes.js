@@ -10,6 +10,19 @@ import {
 } from "../controllers/authController.js";
 import { protect, authorizeRoles } from "../middlewares/authMiddleware.js";
 import { loginRateLimit } from "../middlewares/loginRateLimit.js";
+import {
+  emailRateLimit,
+  passwordResetRateLimit,
+  refreshRateLimit,
+  registrationRateLimit,
+} from "../middlewares/rateLimit.js";
+import {
+  validate,
+  loginSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  refreshSchema,
+} from "../middlewares/validate.js";
 
 const router = express.Router();
 
@@ -102,13 +115,18 @@ const router = express.Router();
  *         description: Password reset
  */
 
-// PUBLIC ROUTES
-router.post("/register", register);
-router.post("/login", loginRateLimit, login);
-router.post("/refresh", refreshAccessToken);
+// PUBLIC ROUTES — validated + rate-limited
+router.post("/register", registrationRateLimit, register);
+router.post("/login", validate(loginSchema), loginRateLimit, login);
+router.post("/refresh", refreshRateLimit, validate(refreshSchema), refreshAccessToken);
 router.post("/logout", logout);
-router.post("/forgot-password", forgotPassword);
-router.post("/reset-password/:token", resetPassword);
+router.post("/forgot-password", emailRateLimit, validate(forgotPasswordSchema), forgotPassword);
+router.post(
+  "/reset-password/:token",
+  passwordResetRateLimit,
+  validate(resetPasswordSchema),
+  resetPassword
+);
 router.get("/me", protect, getMe);
 
 // // PROTECTED ADMIN ONLY
