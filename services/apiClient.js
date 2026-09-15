@@ -18,6 +18,7 @@ const getApiClient = () => {
 
   client = axios.create({
     baseURL,
+    timeout: 30000,
     headers: {
       "x-api-key": process.env.ZEN_API_KEY,
     },

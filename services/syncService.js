@@ -213,20 +213,27 @@ export const syncStudents = async () => {
 };
 
 // Master execution wrapper that coordinates, logs, and alerts on fails
-export const runCompleteSync = async (triggerType = "scheduled", userId = null, req = null) => {
+export const runCompleteSync = async (
+    triggerType = "scheduled",
+    userId = null,
+    req = null,
+    existingLog = null
+) => {
     if (!isZenConfigured()) {
         throw new Error("ZEN_API_BASE_URL is required for Zen sync operations.");
     }
 
-    const startTime = new Date();
-    
-    // 1. Initialize Sync Log
-    const syncLog = await SyncLog.create({
-        startTime,
-        triggerType,
-        triggeredBy: userId,
-        status: "in_progress"
-    });
+    const startTime = existingLog?.startTime || new Date();
+
+    // 1. Initialize Sync Log (or reuse one created by the HTTP trigger)
+    const syncLog =
+        existingLog ||
+        (await SyncLog.create({
+            startTime,
+            triggerType,
+            triggeredBy: userId,
+            status: "in_progress",
+        }));
 
     let totalInstructors = 0;
     let totalStudents = 0;
