@@ -47,6 +47,36 @@ const enrollStudentIntoCourses = async (student, batchId, courseIds) => {
   await student.save();
 };
 
+/** When batch courses change, re-link every student to the new course set. */
+const syncBatchStudentsToCourses = async (batch, previousCourseIds = []) => {
+  const courseIds = getBatchCourseIds(batch);
+  const courseIdSet = new Set(courseIds.map(String));
+  const batchId = String(batch._id);
+
+  for (const studentId of batch.students || []) {
+    const student = await User.findById(studentId);
+    if (!student) continue;
+
+    student.enrolledCourses = (student.enrolledCourses || []).filter((e) => {
+      if (String(e.batch || "") !== batchId) return true;
+      return courseIdSet.has(String(e.course || ""));
+    });
+
+    await enrollStudentIntoCourses(student, batch._id, courseIds);
+  }
+
+  const removed = previousCourseIds
+    .map(String)
+    .filter((id) => id && !courseIdSet.has(id));
+
+  for (const courseId of removed) {
+    await Course.updateOne(
+      { _id: courseId },
+      { $pull: { enrolledStudents: { batchId: batch._id } } }
+    );
+  }
+};
+
 export const createBatch = async (req, res) => {
   try {
     const {
@@ -464,6 +494,8 @@ export const updateBatch = async (req, res) => {
     });
 
     // Multi / single course update — always keep course synced to courses[0]
+    let coursesChanged = false;
+    const previousCourseIds = getBatchCourseIds(batch);
     if (updates.courses !== undefined || updates.course !== undefined) {
       const courseIds = resolveCourseIdsFromBody(updates);
       if (!courseIds.length) {
@@ -475,21 +507,23 @@ export const updateBatch = async (req, res) => {
       }
       batch.courses = courseIds;
       batch.course = courseIds[0];
+      coursesChanged = true;
     }
 
     await batch.save();
 
+    // Re-enroll students into the updated course list
+    if (coursesChanged) {
+      await syncBatchStudentsToCourses(batch, previousCourseIds);
+    }
+
     // Sync students to all courses if changed
     if (updates.students) {
       const courseIds = getBatchCourseIds(batch);
-      for (const courseId of courseIds) {
-        await Course.findByIdAndUpdate(courseId, {
-          $addToSet: {
-            enrolledStudents: {
-              $each: updates.students.map((s) => ({ student: s, enrolledDate: new Date() })),
-            },
-          },
-        });
+      for (const sId of updates.students) {
+        const student = await User.findById(sId);
+        if (!student) continue;
+        await enrollStudentIntoCourses(student, batch._id, courseIds);
       }
     }
 

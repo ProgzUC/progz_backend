@@ -223,6 +223,9 @@ export async function getStudentCourses(req, res) {
             const courseDoc = ec.course;
             const batch = ec.batch;
 
+            // Skip deleted / missing courses (orphaned enrollment refs)
+            if (!courseDoc || !courseDoc._id) continue;
+
             const totalSections =
                 courseDoc?.modules?.reduce(
                     (acc, m) => acc + (m.sections?.length || 0),
