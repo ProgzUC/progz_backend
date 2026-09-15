@@ -1,7 +1,22 @@
 import ClassSession from "../models/ClassSession.js";
 import Batch from "../models/Batch.js";
-import User from "../models/User.js";
 import { canManageBatch, denyAccess } from "../utils/authorizationHelpers.js";
+
+/** Minutes after session start before a join is marked Late */
+const LATE_GRACE_MINUTES = 10;
+
+async function populateSession(sessionId) {
+    return ClassSession.findById(sessionId)
+        .populate("batch", "name meetLink")
+        .populate("trainer", "name email")
+        .populate("attendance.student", "name email");
+}
+
+function computeJoinStatus(startTime, joinedAt) {
+    const graceMs = LATE_GRACE_MINUTES * 60 * 1000;
+    const diff = new Date(joinedAt) - new Date(startTime);
+    return diff <= graceMs ? "Present" : "Late";
+}
 
 /**
  * @desc    Start a new class session
@@ -40,31 +55,147 @@ export async function startClass(req, res) {
             });
         }
 
+        const now = new Date();
+
         // Create attendance array with all students marked as Absent
         const attendance = batch.students.map((student) => ({
             student: student._id,
             status: "Absent",
+            joinedAt: null,
         }));
 
         // Create new class session
         const session = await ClassSession.create({
             batch: batchId,
             trainer: trainerId,
-            date: new Date(),
-            startTime: new Date(),
+            date: now,
+            startTime: now,
+            trainerJoinedAt: now,
             attendance,
         });
 
-        // Populate and return
-        const populatedSession = await ClassSession.findById(session._id)
-            .populate("batch", "name")
-            .populate("trainer", "name email")
-            .populate("attendance.student", "name email");
-
+        const populatedSession = await populateSession(session._id);
         res.status(201).json(populatedSession);
     } catch (error) {
         console.error("Start class error:", error);
         res.status(500).json({ message: "Failed to start class session" });
+    }
+}
+
+/**
+ * @desc    Join class — records join time; trainer auto-starts session; student auto-marks attendance
+ * @route   POST /api/class-session/join
+ * @access  Private (Trainer / Student)
+ */
+export async function joinClass(req, res) {
+    try {
+        const { batchId } = req.body;
+        const userId = req.user.id;
+        const role = req.user.role;
+
+        if (!batchId) {
+            return res.status(400).json({ message: "batchId is required" });
+        }
+
+        const batch = await Batch.findById(batchId).populate("students").lean();
+        if (!batch) {
+            return res.status(404).json({ message: "Batch not found" });
+        }
+
+        if (!batch.meetLink) {
+            return res.status(400).json({ message: "No meet link configured for this batch" });
+        }
+
+        const now = new Date();
+
+        // ── Trainer join: start session if needed, record trainerJoinedAt ──
+        if (role === "trainer") {
+            const isTrainerAssigned = batch.trainers.some(
+                (t) => String(t.trainer) === String(userId)
+            );
+            if (!isTrainerAssigned) {
+                return res.status(403).json({ message: "You are not assigned to this batch" });
+            }
+
+            let session = await ClassSession.findOne({ batch: batchId, endTime: null });
+
+            if (!session) {
+                const attendance = batch.students.map((student) => ({
+                    student: student._id,
+                    status: "Absent",
+                    joinedAt: null,
+                }));
+
+                session = await ClassSession.create({
+                    batch: batchId,
+                    trainer: userId,
+                    date: now,
+                    startTime: now,
+                    trainerJoinedAt: now,
+                    attendance,
+                });
+            } else if (!session.trainerJoinedAt) {
+                session.trainerJoinedAt = now;
+                await session.save();
+            }
+
+            const populated = await populateSession(session._id);
+            return res.json({
+                meetLink: batch.meetLink,
+                role: "trainer",
+                joinedAt: populated.trainerJoinedAt,
+                session: populated,
+            });
+        }
+
+        // ── Student join: require active session, auto-mark Present/Late ──
+        if (role === "student") {
+            const isEnrolled = batch.students.some(
+                (s) => String(s._id) === String(userId)
+            );
+            if (!isEnrolled) {
+                return res.status(403).json({ message: "You are not enrolled in this batch" });
+            }
+
+            const session = await ClassSession.findOne({ batch: batchId, endTime: null });
+            if (!session) {
+                return res.status(400).json({
+                    message: "Class has not started yet. Please wait for the trainer to start the class.",
+                });
+            }
+
+            const entry = session.attendance.find(
+                (e) => String(e.student) === String(userId)
+            );
+            if (!entry) {
+                return res.status(404).json({ message: "You are not in this class session roster" });
+            }
+
+            // First join only — keep original joinedAt / status on re-joins
+            if (!entry.joinedAt) {
+                entry.joinedAt = now;
+                entry.status = computeJoinStatus(session.startTime, now);
+                await session.save();
+            }
+
+            const populated = await populateSession(session._id);
+            const myEntry = populated.attendance.find(
+                (a) => String(a.student._id || a.student) === String(userId)
+            );
+
+            return res.json({
+                meetLink: batch.meetLink,
+                role: "student",
+                joinedAt: myEntry?.joinedAt || entry.joinedAt,
+                status: myEntry?.status || entry.status,
+                session: populated,
+            });
+        }
+
+        return res.status(403).json({ message: "Only trainers and students can join class" });
+    } catch (error) {
+        console.error("Join class error:", error);
+        res.status(500).json({ message: "Failed to join class" });
     }
 }
 
@@ -289,6 +420,7 @@ export async function getStudentAttendance(req, res) {
                     batchName: session.batch.name,
                     trainerName: session.trainer.name,
                     status: studentAttendance.status,
+                    joinedAt: studentAttendance.joinedAt || null,
                     duration,
                     notes: session.notes,
                 });

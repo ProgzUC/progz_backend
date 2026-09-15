@@ -30,6 +30,12 @@ const classSessionSchema = new mongoose.Schema(
             default: null,
         },
 
+        /** When the trainer clicked Join Class / started the session */
+        trainerJoinedAt: {
+            type: Date,
+            default: null,
+        },
+
         attendance: [
             {
                 student: {
@@ -41,6 +47,11 @@ const classSessionSchema = new mongoose.Schema(
                     type: String,
                     enum: ["Present", "Absent", "Late"],
                     default: "Absent",
+                },
+                /** When the student first clicked Join Class */
+                joinedAt: {
+                    type: Date,
+                    default: null,
                 },
             },
         ],

@@ -3,6 +3,7 @@ const router = Router();
 import { protect, authorizeRoles } from "../middlewares/authMiddleware.js";
 import {
     startClass,
+    joinClass,
     markAttendance,
     endClass,
     getClassSessions,
@@ -38,6 +39,7 @@ router.get("/health", (req, res) => {
         timestamp: new Date(),
         availableRoutes: [
             "POST /start",
+            "POST /join",
             "PATCH /:id/attendance",
             "PATCH /:id/end",
             "GET /batch/:batchId",
@@ -60,6 +62,20 @@ router.get("/health", (req, res) => {
  *         description: Class session started
  */
 router.post("/start", protect, authorizeRoles("trainer"), submissionRateLimit, startClass);
+
+/**
+ * @swagger
+ * /class-session/join:
+ *   post:
+ *     summary: Join class — records join time and auto-marks student attendance
+ *     tags: [Class Sessions]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Joined successfully
+ */
+router.post("/join", protect, authorizeRoles("trainer", "student"), submissionRateLimit, joinClass);
 
 /**
  * @swagger
