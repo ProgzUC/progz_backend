@@ -4,11 +4,20 @@ const batchSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
 
+    // Primary course (first of courses[]) — kept for backward compatibility
     course: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Course",
       required: true,
     },
+
+    // Multi-course support; course is always synced to courses[0]
+    courses: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Course",
+      },
+    ],
 
     trainers: [
       {

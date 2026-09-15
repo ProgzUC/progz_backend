@@ -17,6 +17,7 @@ export const trainerBootstrap = async (req, res) => {
       .lean();
     const batches = await Batch.find({ "trainers.trainer": trainerId })
       .populate("course", "courseName courseDuration modules")
+      .populate("courses", "courseName")
       .lean();
 
     let totalStudents = 0;
@@ -32,6 +33,14 @@ export const trainerBootstrap = async (req, res) => {
         console.warn("Course not populated for batch:", batch._id);
         return;
       }
+
+      const courseNameList = [
+        course.courseName,
+        ...(batch.courses || [])
+          .map((c) => c?.courseName)
+          .filter((n) => n && n !== course.courseName),
+      ];
+      const courseNamesLabel = courseNameList.join(", ");
 
       const totalSections = course.modules.reduce(
         (acc, m) => acc + (m.sections?.length || 0),
@@ -58,7 +67,7 @@ export const trainerBootstrap = async (req, res) => {
         activeBatches.push({
           batchId: batch._id,
           batchName: batch.name,
-          courseName: course.courseName,
+          courseName: courseNamesLabel,
           duration: course.courseDuration,
           studentsCount: batch.students?.length || 0,
           timing: timingStr,
@@ -83,7 +92,7 @@ export const trainerBootstrap = async (req, res) => {
           upcomingClasses.push({
             batchId: batch._id,
             batchName: batch.name,
-            courseName: course.courseName,
+            courseName: courseNamesLabel,
             timing: timingStr,
             meetLink: batch.meetLink,
             nextClassAt: nextClassDate,
@@ -95,7 +104,7 @@ export const trainerBootstrap = async (req, res) => {
         completedBatches.push({
           batchId: batch._id,
           batchName: batch.name,
-          courseName: course.courseName,
+          courseName: courseNamesLabel,
           startDate: batch.startDate,
           endDate: batch.endDate,
           status: batch.status
@@ -143,6 +152,7 @@ export const getTrainerBatchDetails = async (req, res) => {
       "trainers.trainer": trainerId,
     })
       .populate("course", "courseName modules")
+      .populate("courses", "courseName")
       .populate("students", "name email")
       .lean();
 
@@ -156,15 +166,22 @@ export const getTrainerBatchDetails = async (req, res) => {
 
     const trainerAssign = batch.trainers?.find(t => String(t.trainer) === String(trainerId)) || null;
 
+    const courseNameList = [
+      batch.course?.courseName,
+      ...(batch.courses || [])
+        .map((c) => c?.courseName)
+        .filter((n) => n && n !== batch.course?.courseName),
+    ].filter(Boolean);
+
     res.json({
       batchId: batch._id,
       batchName: batch.name,
-      courseName: batch.course.courseName,
+      courseName: courseNameList.join(", "),
       classTiming: batch.classTiming,
       timing: timingStr,
       startDate: batch.startDate,
       students: batch.students,
-      curriculum: batch.course.modules,
+      curriculum: batch.course?.modules || [],
       sectionProgress: batch.sectionProgress,
       meetLink: batch.meetLink,
       daysOfWeek: batch.daysOfWeek,
@@ -202,17 +219,28 @@ export const getTrainerCourses = async (req, res) => {
 
     // Fetch batches for these courses to get "real-time" unique student enrollment
     const batches = await Batch.find({
-      course: { $in: courseIds },
+      $or: [
+        { course: { $in: courseIds } },
+        { courses: { $in: courseIds } },
+      ],
     })
-      .select("course students")
+      .select("course courses students")
       .lean();
 
     // Map courseId to unique students across all its batches
     const studentMap = {};
     batches.forEach((b) => {
-      const cid = b.course.toString();
-      if (!studentMap[cid]) studentMap[cid] = new Set();
-      (b.students || []).forEach((sid) => studentMap[cid].add(sid.toString()));
+      const linkedCourseIds = [
+        b.course,
+        ...(Array.isArray(b.courses) ? b.courses : []),
+      ]
+        .filter(Boolean)
+        .map((c) => c.toString());
+
+      linkedCourseIds.forEach((cid) => {
+        if (!studentMap[cid]) studentMap[cid] = new Set();
+        (b.students || []).forEach((sid) => studentMap[cid].add(sid.toString()));
+      });
     });
 
     const response = courses.map((c) => {

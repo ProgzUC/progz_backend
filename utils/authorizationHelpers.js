@@ -3,7 +3,7 @@
  */
 
 export const normalizeRole = (role) => {
-  const value = String(role || "").toLowerCase();
+  const value = String(role || "").trim().toLowerCase();
   if (value === "instructor") return "trainer";
   return value;
 };
@@ -34,6 +34,9 @@ export const isBatchTrainer = (batch, userId) => {
 
 export const canManageCourse = (req, course) =>
   isAdmin(req) || isCourseInstructor(course, getUserId(req));
+
+/** Admins can create batches for any course; trainers only for assigned courses. */
+export const canCreateBatch = (req, course) => canManageCourse(req, course);
 
 export const canManageBatch = (req, batch) =>
   isAdmin(req) || isBatchTrainer(batch, getUserId(req));

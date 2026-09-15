@@ -76,6 +76,7 @@ export const login = async (req, res) => {
       return sendError(res, 401, "Invalid email or password", { code: "INVALID_CREDENTIALS" });
     }
 
+    clearAuthCookies(res);
     const sessionData = await issueAuthSession(res, user);
     clearLoginFailures(rateLimitKey);
     res.json(sessionData);

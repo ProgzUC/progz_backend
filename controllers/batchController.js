@@ -5,18 +5,52 @@ import RecycleBin from "../models/RecycleBin.js";
 import PendingUser from "../models/PendingUser.js";
 import {
   isAdmin,
-  canManageCourse,
+  canCreateBatch,
   canManageBatch,
   denyAccess,
   getUserId,
 } from "../utils/authorizationHelpers.js";
 import { logAuditAction } from "../utils/auditLogger.js";
+import {
+  resolveCourseIdsFromBody,
+  getBatchCourseIds,
+} from "../utils/batchCourses.js";
+
+const enrollStudentIntoCourses = async (student, batchId, courseIds) => {
+  for (const courseId of courseIds) {
+    const existing = student.enrolledCourses.find(
+      (e) => e.course?.toString() === courseId.toString()
+    );
+    if (existing) {
+      existing.batch = batchId;
+    } else {
+      student.enrolledCourses.push({
+        course: courseId,
+        batch: batchId,
+        enrolledAt: new Date(),
+      });
+    }
+
+    await Course.updateOne(
+      { _id: courseId, "enrolledStudents.student": { $ne: student._id } },
+      {
+        $push: {
+          enrolledStudents: {
+            student: student._id,
+            enrolledDate: new Date(),
+            batchId,
+          },
+        },
+      }
+    );
+  }
+  await student.save();
+};
 
 export const createBatch = async (req, res) => {
   try {
     const {
       name,
-      course,
       trainers = [],
       students = [],
       classTiming,
@@ -28,22 +62,27 @@ export const createBatch = async (req, res) => {
       sectionProgress = [],
     } = req.body;
 
+    const courseIds = resolveCourseIdsFromBody(req.body);
+
     // Required field validation
-    if (!name || !course || !classTiming?.startTime || !classTiming?.endTime) {
+    if (!name || !courseIds.length || !classTiming?.startTime || !classTiming?.endTime) {
       return res.status(400).json({
-        msg: "name, course, classTiming.startTime and classTiming.endTime are required",
+        msg: "name, course(s), classTiming.startTime and classTiming.endTime are required",
       });
     }
 
-    // Verify course exists
-    const courseExists = await Course.findById(course);
-    if (!courseExists) {
-      return res.status(404).json({ msg: "Course not found" });
+    const courseDocs = await Course.find({ _id: { $in: courseIds } });
+    if (courseDocs.length !== courseIds.length) {
+      return res.status(404).json({ msg: "One or more courses not found" });
     }
 
-    if (!isAdmin(req) && !canManageCourse(req, courseExists)) {
-      return denyAccess(res, "You do not have permission to create a batch for this course");
+    for (const courseDoc of courseDocs) {
+      if (!canCreateBatch(req, courseDoc)) {
+        return denyAccess(res, "You do not have permission to create a batch for one or more selected courses");
+      }
     }
+
+    const primaryCourse = courseIds[0];
 
     // Optional: validate trainers & students existence
     if (trainers.length) {
@@ -68,7 +107,8 @@ export const createBatch = async (req, res) => {
 
     const batch = await Batch.create({
       name,
-      course,
+      course: primaryCourse,
+      courses: courseIds,
       trainers: trainers.map(t => ({
         trainer: t.trainer,
         assignedModules: t.assignedModules || [],
@@ -95,33 +135,7 @@ export const createBatch = async (req, res) => {
       for (const studentId of students) {
         const student = await User.findById(studentId);
         if (!student) continue;
-
-        const existing = student.enrolledCourses.find(
-          (e) => e.course?.toString() === course.toString()
-        );
-        if (existing) {
-          existing.batch = batch._id;
-        } else {
-          student.enrolledCourses.push({
-            course,
-            batch: batch._id,
-            enrolledAt: new Date(),
-          });
-        }
-        await student.save();
-
-        await Course.updateOne(
-          { _id: course, "enrolledStudents.student": { $ne: studentId } },
-          {
-            $push: {
-              enrolledStudents: {
-                student: studentId,
-                enrolledDate: new Date(),
-                batchId: batch._id,
-              },
-            },
-          }
-        );
+        await enrollStudentIntoCourses(student, batch._id, courseIds);
       }
     }
 
@@ -147,6 +161,7 @@ export const getAllBatches = async (req, res) => {
 
         const batches = await Batch.find(query)
             .populate("course", "courseName")
+            .populate("courses", "courseName")
             .populate("students", "name email")
             .populate("trainers.trainer", "name email");
         res.json(batches);
@@ -162,6 +177,7 @@ export const getBatch = async (req, res) => {
     try {
         const batch = await Batch.findById(req.params.id)
             .populate("course", "courseName")
+            .populate("courses", "courseName")
             .populate("students", "name email phone enrolledCourses")
             .populate("trainers.trainer", "name email phone");
 
@@ -206,36 +222,8 @@ export const enrollStudent = async (req, res) => {
             await batch.save();
         }
 
-        // Update student's enrolledCourses to include this batch reference for that course
-        let enrolled = student.enrolledCourses.find(
-            (e) => e.course.toString() === batch.course.toString()
-        );
-
-        if (enrolled) {
-            enrolled.batch = batchId;
-        } else {
-            student.enrolledCourses.push({
-                course: batch.course,
-                batch: batchId,
-                enrolledAt: new Date(),
-            });
-        }
-
-        await student.save();
-
-        // Sync to Course.enrolledStudents (dedupe by student id)
-        await Course.updateOne(
-            { _id: batch.course, "enrolledStudents.student": { $ne: studentId } },
-            {
-                $push: {
-                    enrolledStudents: {
-                        student: studentId,
-                        enrolledDate: new Date(),
-                        batchId: batch._id,
-                    },
-                },
-            }
-        );
+        const courseIds = getBatchCourseIds(batch);
+        await enrollStudentIntoCourses(student, batchId, courseIds);
 
         await logAuditAction({
             req,
@@ -246,7 +234,7 @@ export const enrollStudent = async (req, res) => {
                 batchName: batch.name,
                 studentId,
                 studentEmail: student.email,
-                courseId: batch.course
+                courseIds,
             }
         });
 
@@ -458,7 +446,6 @@ export const updateBatch = async (req, res) => {
     // Apply updates
     const allowedFields = [
       "name",
-      "course",
       "trainers",
       "students",
       "classTiming",
@@ -476,17 +463,34 @@ export const updateBatch = async (req, res) => {
       }
     });
 
+    // Multi / single course update — always keep course synced to courses[0]
+    if (updates.courses !== undefined || updates.course !== undefined) {
+      const courseIds = resolveCourseIdsFromBody(updates);
+      if (!courseIds.length) {
+        return res.status(400).json({ msg: "At least one course is required" });
+      }
+      const courseDocs = await Course.find({ _id: { $in: courseIds } });
+      if (courseDocs.length !== courseIds.length) {
+        return res.status(404).json({ msg: "One or more courses not found" });
+      }
+      batch.courses = courseIds;
+      batch.course = courseIds[0];
+    }
+
     await batch.save();
 
-    // Sync students to Course if changed
+    // Sync students to all courses if changed
     if (updates.students) {
-      await Course.findByIdAndUpdate(batch.course, {
-        $addToSet: { 
-          enrolledStudents: { 
-            $each: updates.students.map(s => ({ student: s, enrolledDate: new Date() })) 
-          } 
-        }
-      });
+      const courseIds = getBatchCourseIds(batch);
+      for (const courseId of courseIds) {
+        await Course.findByIdAndUpdate(courseId, {
+          $addToSet: {
+            enrolledStudents: {
+              $each: updates.students.map((s) => ({ student: s, enrolledDate: new Date() })),
+            },
+          },
+        });
+      }
     }
 
     res.json({
@@ -600,33 +604,8 @@ export const bulkEnrollStudents = async (req, res) => {
                     enrolledCount++;
                 }
 
-                let enrolled = student.enrolledCourses.find(
-                    (e) => e.course.toString() === batch.course.toString()
-                );
-
-                if (enrolled) {
-                    enrolled.batch = batchId;
-                } else {
-                    student.enrolledCourses.push({
-                        course: batch.course,
-                        batch: batchId,
-                        enrolledAt: new Date(),
-                    });
-                }
-                await student.save();
-
-                await Course.updateOne(
-                    { _id: batch.course, "enrolledStudents.student": { $ne: sId } },
-                    {
-                        $push: {
-                            enrolledStudents: {
-                                student: sId,
-                                enrolledDate: new Date(),
-                                batchId: batch._id,
-                            },
-                        },
-                    }
-                );
+                const courseIds = getBatchCourseIds(batch);
+                await enrollStudentIntoCourses(student, batchId, courseIds);
 
                 await logAuditAction({
                     req,
@@ -637,7 +616,7 @@ export const bulkEnrollStudents = async (req, res) => {
                         batchName: batch.name,
                         studentId: sId,
                         studentEmail: student.email,
-                        courseId: batch.course,
+                        courseIds,
                         type: "bulk"
                     }
                 });
