@@ -7,6 +7,10 @@ import { validatePassword } from "../utils/passwordValidation.js";
 import { revokeRefreshToken } from "../utils/refreshTokenStore.js";
 import { clearAuthCookies } from "../utils/cookieAuth.js";
 import { canManageBatch, denyAccess } from "../utils/authorizationHelpers.js";
+import {
+  findSectionProgressIndex,
+  matchesSectionProgress,
+} from "../utils/batchCourses.js";
 
 export const trainerBootstrap = async (req, res) => {
   try {
@@ -152,7 +156,7 @@ export const getTrainerBatchDetails = async (req, res) => {
       "trainers.trainer": trainerId,
     })
       .populate("course", "courseName modules")
-      .populate("courses", "courseName")
+      .populate("courses", "courseName modules")
       .populate("students", "name email")
       .lean();
 
@@ -166,22 +170,35 @@ export const getTrainerBatchDetails = async (req, res) => {
 
     const trainerAssign = batch.trainers?.find(t => String(t.trainer) === String(trainerId)) || null;
 
-    const courseNameList = [
-      batch.course?.courseName,
-      ...(batch.courses || [])
-        .map((c) => c?.courseName)
-        .filter((n) => n && n !== batch.course?.courseName),
-    ].filter(Boolean);
+    // Build multi-course curriculum list (primary first, then others)
+    const courseMap = new Map();
+    if (batch.course?._id) {
+      courseMap.set(String(batch.course._id), batch.course);
+    }
+    (batch.courses || []).forEach((c) => {
+      if (c?._id) courseMap.set(String(c._id), c);
+    });
+
+    const curricula = [...courseMap.values()].map((c) => ({
+      courseId: c._id,
+      courseName: c.courseName,
+      modules: c.modules || [],
+    }));
+
+    const courseNameList = curricula.map((c) => c.courseName).filter(Boolean);
 
     res.json({
       batchId: batch._id,
       batchName: batch.name,
       courseName: courseNameList.join(", "),
+      primaryCourseId: batch.course?._id || null,
       classTiming: batch.classTiming,
       timing: timingStr,
       startDate: batch.startDate,
       students: batch.students,
-      curriculum: batch.course?.modules || [],
+      // Keep legacy flat curriculum for primary course
+      curriculum: batch.course?.modules || curricula[0]?.modules || [],
+      curricula,
       sectionProgress: batch.sectionProgress,
       meetLink: batch.meetLink,
       daysOfWeek: batch.daysOfWeek,
@@ -375,10 +392,9 @@ export const updateTrainerprofile = async (req, res) => {
 
 export const toggleSectionCompletion = async (req, res) => {
   try {
-    let { batchId, moduleIndex, sectionIndex } = req.body;
+    let { batchId, moduleIndex, sectionIndex, courseId } = req.body;
     const trainerId = req.user.id;
 
-    // Basic validation / normalize types
     if (!batchId) return res.status(400).json({ message: "batchId required" });
     moduleIndex = moduleIndex !== undefined ? parseInt(moduleIndex, 10) : undefined;
     sectionIndex = sectionIndex !== undefined ? parseInt(sectionIndex, 10) : undefined;
@@ -394,15 +410,23 @@ export const toggleSectionCompletion = async (req, res) => {
       return denyAccess(res, "You do not have permission to update section progress for this batch");
     }
 
-    // Find if progress entry exists
-    const progressIndex = batch.sectionProgress.findIndex(
-      p => p.moduleIndex === moduleIndex && p.sectionIndex === sectionIndex
-    );
+    const primaryCourseId = String(batch.course?._id || batch.course);
+    const resolvedCourseId = courseId ? String(courseId) : primaryCourseId;
+    const matchOpts = {
+      courseId: resolvedCourseId,
+      moduleIndex,
+      sectionIndex,
+      primaryCourseId,
+    };
+
+    const progressIndex = findSectionProgressIndex(batch.sectionProgress, matchOpts);
 
     if (progressIndex > -1) {
-      // Toggle existing
       const currentStatus = !!batch.sectionProgress[progressIndex].isCompleted;
       batch.sectionProgress[progressIndex].isCompleted = !currentStatus;
+      if (!batch.sectionProgress[progressIndex].courseId) {
+        batch.sectionProgress[progressIndex].courseId = resolvedCourseId;
+      }
 
       if (!currentStatus) {
         batch.sectionProgress[progressIndex].completedBy = trainerId;
@@ -412,8 +436,8 @@ export const toggleSectionCompletion = async (req, res) => {
         batch.sectionProgress[progressIndex].completionTime = undefined;
       }
     } else {
-      // Create new entry as completed
       batch.sectionProgress.push({
+        courseId: resolvedCourseId,
         moduleIndex,
         sectionIndex,
         isCompleted: true,
@@ -424,11 +448,11 @@ export const toggleSectionCompletion = async (req, res) => {
 
     await batch.save();
 
-    const updatedEntry = batch.sectionProgress.find(
-      p => p.moduleIndex === moduleIndex && p.sectionIndex === sectionIndex
+    const updatedEntry = batch.sectionProgress.find((p) =>
+      matchesSectionProgress(p, matchOpts)
     );
 
-    res.json({ msg: 'Section progress updated', sectionProgress: updatedEntry, batchId: batch._id });
+    res.json({ msg: "Section progress updated", sectionProgress: updatedEntry, batchId: batch._id });
   } catch (err) {
     console.error("Toggle error:", err);
     res.status(500).json({ message: "Toggle failed" });

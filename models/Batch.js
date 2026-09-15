@@ -68,6 +68,10 @@ const batchSchema = new mongoose.Schema(
 
     sectionProgress: [
       {
+        courseId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Course",
+        },
         moduleIndex: Number,
         sectionIndex: Number,
         isCompleted: Boolean,

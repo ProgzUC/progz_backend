@@ -40,3 +40,45 @@ export const getBatchCourseNames = (batch) => {
   }
   return [];
 };
+
+/** Match section progress for a course (legacy rows without courseId count as primary). */
+export const matchesSectionProgress = (
+  entry,
+  { courseId, moduleIndex, sectionIndex, primaryCourseId }
+) => {
+  if (!entry) return false;
+  if (Number(entry.moduleIndex) !== Number(moduleIndex)) return false;
+  if (Number(entry.sectionIndex) !== Number(sectionIndex)) return false;
+
+  const entryCourseId = entry.courseId ? String(entry.courseId) : null;
+  const targetCourseId = courseId ? String(courseId) : null;
+  const primaryId = primaryCourseId ? String(primaryCourseId) : null;
+
+  if (!targetCourseId) {
+    return !entryCourseId || (primaryId && entryCourseId === primaryId);
+  }
+
+  if (entryCourseId) {
+    return entryCourseId === targetCourseId;
+  }
+
+  // Legacy entry without courseId → treat as primary course only
+  return primaryId ? targetCourseId === primaryId : true;
+};
+
+export const findSectionProgressIndex = (sectionProgress, opts) => {
+  if (!Array.isArray(sectionProgress)) return -1;
+  return sectionProgress.findIndex((p) => matchesSectionProgress(p, opts));
+};
+
+export const filterCompletedForCourse = (sectionProgress, courseId, primaryCourseId) => {
+  if (!Array.isArray(sectionProgress)) return [];
+  return sectionProgress.filter((sp) => {
+    if (!sp?.isCompleted) return false;
+    const entryCourseId = sp.courseId ? String(sp.courseId) : null;
+    const target = String(courseId);
+    const primary = primaryCourseId ? String(primaryCourseId) : null;
+    if (entryCourseId) return entryCourseId === target;
+    return primary ? target === primary : true;
+  });
+};

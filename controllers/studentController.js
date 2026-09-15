@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { validatePassword } from "../utils/passwordValidation.js";
 import { revokeRefreshToken } from "../utils/refreshTokenStore.js";
 import { clearAuthCookies } from "../utils/cookieAuth.js";
+import { filterCompletedForCourse } from "../utils/batchCourses.js";
 
 /**
  * @desc    Get student profile
@@ -211,7 +212,7 @@ export async function getStudentCourses(req, res) {
 
         const user = await User.findById(studentId)
             .populate({ path: "enrolledCourses.course", select: "courseName modules thumbnail instructor" })
-            .populate({ path: "enrolledCourses.batch", select: "name sectionProgress" })
+            .populate({ path: "enrolledCourses.batch", select: "name sectionProgress meetLink classTiming daysOfWeek status course courses" })
             .lean();
 
         if (!user) return res.status(404).json({ message: "User not found" });
@@ -234,8 +235,11 @@ export async function getStudentCourses(req, res) {
 
             let completedList = [];
             if (batch && Array.isArray(batch.sectionProgress)) {
-                completedList = batch.sectionProgress.filter(
-                    sp => sp.isCompleted  // Section marked complete in batch (trainer-marked)
+                const primaryCourseId = batch.course?._id || batch.course;
+                completedList = filterCompletedForCourse(
+                    batch.sectionProgress,
+                    courseDoc._id,
+                    primaryCourseId
                 );
             }
 
@@ -254,6 +258,10 @@ export async function getStudentCourses(req, res) {
                 courseImage: courseDoc?.thumbnail || null,
                 batchId: batch?._id || null,
                 batchName: batch?.name || null,
+                meetLink: batch?.meetLink || null,
+                classTiming: batch?.classTiming || null,
+                daysOfWeek: batch?.daysOfWeek || [],
+                batchStatus: batch?.status || null,
                 enrolledAt: ec.enrolledAt,
                 totalLessons: totalSections,
                 completedLessons,
@@ -311,7 +319,10 @@ export async function getCourseProgress(req, res) {
             batch = await Batch.findById(enrollment.batch).lean();
         } else {
             // fallback: find any batch for this course that includes the student
-            batch = await Batch.findOne({ course: courseId, students: studentId }).lean();
+            batch = await Batch.findOne({
+                students: studentId,
+                $or: [{ course: courseId }, { courses: courseId }],
+            }).lean();
         }
 
         // Compute totals from course modules
@@ -320,13 +331,22 @@ export async function getCourseProgress(req, res) {
             0
         );
 
-        // Compute completed sections in the batch (marked by trainer as taught/covered)
+        // Compute completed sections in the batch for THIS course only
         let completedSections = 0;
         let completedList = [];
         if (batch && Array.isArray(batch.sectionProgress)) {
-            completedList = batch.sectionProgress
-                .filter(sp => sp.isCompleted)  // Section marked complete in batch (trainer-marked)
-                .map(sp => ({ moduleIndex: sp.moduleIndex, sectionIndex: sp.sectionIndex, completionTime: sp.completionTime }));
+            const primaryCourseId = batch.course?._id || batch.course;
+            completedList = filterCompletedForCourse(
+                batch.sectionProgress,
+                courseId,
+                primaryCourseId
+            ).map((sp) => ({
+                moduleIndex: sp.moduleIndex,
+                sectionIndex: sp.sectionIndex,
+                courseId: sp.courseId || primaryCourseId,
+                isCompleted: true,
+                completionTime: sp.completionTime,
+            }));
             completedSections = completedList.length;
         }
 

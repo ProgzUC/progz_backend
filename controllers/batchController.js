@@ -14,6 +14,8 @@ import { logAuditAction } from "../utils/auditLogger.js";
 import {
   resolveCourseIdsFromBody,
   getBatchCourseIds,
+  findSectionProgressIndex,
+  matchesSectionProgress,
 } from "../utils/batchCourses.js";
 
 const enrollStudentIntoCourses = async (student, batchId, courseIds) => {
@@ -357,14 +359,21 @@ export const manageTrainers = async (req, res) => {
     }
 };
 
-// @desc    Toggle section completion
+// @desc    Toggle section completion (lock/unlock for students)
 // @route   POST /api/batches/:id/sections/toggle
 // @access  Private (Admin/Trainer)
 export const toggleSectionCompletion = async (req, res) => {
     try {
-        const { moduleIndex, sectionIndex } = req.body;
+        let { moduleIndex, sectionIndex, courseId } = req.body;
         const batchId = req.params.id;
         const userId = req.user.id;
+
+        moduleIndex = moduleIndex !== undefined ? parseInt(moduleIndex, 10) : undefined;
+        sectionIndex = sectionIndex !== undefined ? parseInt(sectionIndex, 10) : undefined;
+
+        if (moduleIndex === undefined || Number.isNaN(moduleIndex) || sectionIndex === undefined || Number.isNaN(sectionIndex)) {
+            return res.status(400).json({ msg: "moduleIndex and sectionIndex must be valid integers" });
+        }
 
         const batch = await Batch.findById(batchId);
         if (!batch) return res.status(404).json({ msg: "Batch not found" });
@@ -373,29 +382,34 @@ export const toggleSectionCompletion = async (req, res) => {
             return denyAccess(res, "You do not have permission to update section progress for this batch");
         }
 
-        // Find if progress entry exists
-        const progressIndex = batch.sectionProgress.findIndex(
-            (p) => p.moduleIndex === moduleIndex && p.sectionIndex === sectionIndex
-        );
+        const primaryCourseId = String(batch.course?._id || batch.course);
+        const resolvedCourseId = courseId ? String(courseId) : primaryCourseId;
+        const matchOpts = {
+            courseId: resolvedCourseId,
+            moduleIndex,
+            sectionIndex,
+            primaryCourseId,
+        };
+
+        const progressIndex = findSectionProgressIndex(batch.sectionProgress, matchOpts);
 
         if (progressIndex > -1) {
-            // Toggle existing
             const currentStatus = batch.sectionProgress[progressIndex].isCompleted;
             batch.sectionProgress[progressIndex].isCompleted = !currentStatus;
+            if (!batch.sectionProgress[progressIndex].courseId) {
+                batch.sectionProgress[progressIndex].courseId = resolvedCourseId;
+            }
 
             if (!currentStatus) {
-                // Marking as completed
                 batch.sectionProgress[progressIndex].completedBy = userId;
                 batch.sectionProgress[progressIndex].completionTime = new Date();
             } else {
-                // Marking as incomplete (optional: clear details or keep history? usually clear for current state)
                 batch.sectionProgress[progressIndex].completedBy = undefined;
                 batch.sectionProgress[progressIndex].completionTime = undefined;
             }
-
         } else {
-            // Create new entry as completed
             batch.sectionProgress.push({
+                courseId: resolvedCourseId,
                 moduleIndex,
                 sectionIndex,
                 isCompleted: true,
@@ -406,9 +420,8 @@ export const toggleSectionCompletion = async (req, res) => {
 
         await batch.save();
 
-        // Return the updated section progress element or the whole batch
-        const updatedEntry = batch.sectionProgress.find(
-            (p) => p.moduleIndex === moduleIndex && p.sectionIndex === sectionIndex
+        const updatedEntry = batch.sectionProgress.find((p) =>
+            matchesSectionProgress(p, matchOpts)
         );
 
         res.json({ msg: "Section progress updated", sectionProgress: updatedEntry, batchId });
