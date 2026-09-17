@@ -55,6 +55,7 @@ const courseVersionSchema = new mongoose.Schema(
         ],
         courseDescription: String,
         courseDuration: Number,
+        courseDurationMonths: Number,
         modules: [moduleSchema],
         enrolledStudents: [enrollmentSchema],
     },

@@ -16,7 +16,7 @@ import { logAuditAction } from "../utils/auditLogger.js";
 // @access  Private (Trainer/Admin)
 export const createCourse = async (req, res) => {
   try {
-    const { courseName, courseDescription, courseDuration, modules, thumbnail } = req.body;
+    const { courseName, courseDescription, courseDuration, courseDurationMonths, modules, thumbnail } = req.body;
 
     // Generate courseId from courseName
     // slugify: lowercase, replace non-alphanumeric with hyphen, trim hyphens
@@ -38,6 +38,7 @@ export const createCourse = async (req, res) => {
       instructor,
       courseDescription,
       courseDuration,
+      courseDurationMonths,
       modules,
       thumbnail
     });
@@ -361,6 +362,7 @@ export const updateCourse = async (req, res) => {
       instructor: course.instructor,
       courseDescription: course.courseDescription,
       courseDuration: course.courseDuration,
+      courseDurationMonths: course.courseDurationMonths,
       modules: course.modules,
       enrolledStudents: course.enrolledStudents,
     });
@@ -373,6 +375,7 @@ export const updateCourse = async (req, res) => {
     if (updates.courseId !== undefined) course.courseId = updates.courseId;
     if (updates.courseDescription !== undefined) course.courseDescription = updates.courseDescription;
     if (updates.courseDuration !== undefined) course.courseDuration = updates.courseDuration;
+    if (updates.courseDurationMonths !== undefined) course.courseDurationMonths = updates.courseDurationMonths;
     if (updates.modules !== undefined) course.modules = updates.modules;
     if (updates.thumbnail !== undefined) course.thumbnail = updates.thumbnail;
 
@@ -473,6 +476,7 @@ export const rollbackCourse = async (req, res) => {
       instructor: course.instructor,
       courseDescription: course.courseDescription,
       courseDuration: course.courseDuration,
+      courseDurationMonths: course.courseDurationMonths,
       modules: course.modules,
       enrolledStudents: course.enrolledStudents,
     });
@@ -483,6 +487,7 @@ export const rollbackCourse = async (req, res) => {
     course.instructor = targetVersion.instructor;
     course.courseDescription = targetVersion.courseDescription;
     course.courseDuration = targetVersion.courseDuration;
+    course.courseDurationMonths = targetVersion.courseDurationMonths;
     course.modules = targetVersion.modules;
     // enrolledStudents usually shouldn't be rolled back as it implies data loss of enrollments? 
     // But requirement implies "editing course content". 

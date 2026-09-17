@@ -62,6 +62,10 @@ const courseSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    courseDurationMonths: {
+      type: Number,
+      min: 1,
+    },
     modules: [moduleSchema],
     enrolledStudents: [enrollmentSchema],
   },
