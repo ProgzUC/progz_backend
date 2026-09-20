@@ -5,6 +5,7 @@ import {
   getEnrollmentTrends,
   getUserDistribution,
   getRecentActivity,
+  sendAnnouncementEmail,
 } from "../controllers/adminController.js";
 
 const router = express.Router();
@@ -71,5 +72,11 @@ router.get('/stats', protect, authorizeRoles('admin'), getAdminStats);
 router.get('/enrollment-trends', protect, authorizeRoles('admin'), getEnrollmentTrends);
 router.get('/user-distribution', protect, authorizeRoles('admin'), getUserDistribution);
 router.get('/recent-activity', protect, authorizeRoles('admin'), getRecentActivity);
+router.post(
+  '/announcements/email',
+  protect,
+  authorizeRoles('admin'),
+  sendAnnouncementEmail
+);
 
 export default router;

@@ -259,8 +259,9 @@ export const getEnrollmentAnalytics = async (req, res) => {
                     cActive++;
                 }
 
-                if (e.enrolledDate && e.enrolledDate >= start) {
-                    const key = `${e.enrolledDate.getFullYear()}-${String(e.enrolledDate.getMonth()+1).padStart(2,'0')}`;
+                const enrolledAt = e.enrolledDate ? new Date(e.enrolledDate) : null;
+                if (enrolledAt && !Number.isNaN(enrolledAt.getTime()) && enrolledAt >= start) {
+                    const key = `${enrolledAt.getFullYear()}-${String(enrolledAt.getMonth()+1).padStart(2,'0')}`;
                     if (trendMap[key]) {
                         trendMap[key].value++;
                     }
