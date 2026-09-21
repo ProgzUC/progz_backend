@@ -5,6 +5,11 @@ import bcrypt from "bcryptjs";
 import { validatePassword } from "../utils/passwordValidation.js";
 import { logAuditAction } from "../utils/auditLogger.js";
 import { sendError } from "../utils/apiError.js";
+import {
+    notifyUserApproved,
+    notifyUserRejected,
+    notifyRegistrationPending,
+} from "../services/notificationService.js";
 
 const SELF_REGISTER_ROLES = ["student", "trainer"];
 const ALL_ROLES = ["admin", "trainer", "student"];
@@ -96,6 +101,8 @@ export const registerUser = async (req, res) => {
             status: "pending",
         });
 
+        notifyRegistrationPending(newPendingUser);
+
         res.status(201).json({
             msg: "Registration successful. Please wait for admin approval.",
             user: {
@@ -156,6 +163,7 @@ export const adminCreateUser = async (req, res) => {
 
         // Save directly to User
         const newUser = await User.create(userData);
+        notifyUserApproved(newUser);
 
         res.status(201).json({
             msg: "User created successfully",
@@ -223,6 +231,8 @@ export const approveUser = async (req, res) => {
             }
         });
 
+        notifyUserApproved(newUser);
+
         res.status(200).json({
             msg: "User approved and created successfully",
             user: {
@@ -269,7 +279,15 @@ export const rejectUser = async (req, res) => {
             return res.status(404).json({ msg: "Pending user request not found" });
         }
 
+        const rejected = {
+            email: pendingUser.email,
+            name: pendingUser.name,
+            role: pendingUser.role,
+        };
+
         await PendingUser.findByIdAndDelete(id);
+
+        notifyUserRejected(rejected);
 
         await logAuditAction({
             req,

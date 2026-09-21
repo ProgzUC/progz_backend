@@ -5,8 +5,14 @@ import {
   getEnrollmentTrends,
   getUserDistribution,
   getRecentActivity,
-  sendAnnouncementEmail,
 } from "../controllers/adminController.js";
+import {
+  getAnnouncementRecipients,
+  listAdminAnnouncements,
+  createAnnouncement,
+  updateAnnouncement,
+  deleteAnnouncement,
+} from "../controllers/announcementController.js";
 
 const router = express.Router();
 
@@ -72,11 +78,15 @@ router.get('/stats', protect, authorizeRoles('admin'), getAdminStats);
 router.get('/enrollment-trends', protect, authorizeRoles('admin'), getEnrollmentTrends);
 router.get('/user-distribution', protect, authorizeRoles('admin'), getUserDistribution);
 router.get('/recent-activity', protect, authorizeRoles('admin'), getRecentActivity);
-router.post(
-  '/announcements/email',
+router.get(
+  '/announcements/recipients',
   protect,
   authorizeRoles('admin'),
-  sendAnnouncementEmail
+  getAnnouncementRecipients
 );
+router.get('/announcements', protect, authorizeRoles('admin'), listAdminAnnouncements);
+router.post('/announcements', protect, authorizeRoles('admin'), createAnnouncement);
+router.patch('/announcements/:id', protect, authorizeRoles('admin'), updateAnnouncement);
+router.delete('/announcements/:id', protect, authorizeRoles('admin'), deleteAnnouncement);
 
 export default router;

@@ -1,38 +1,75 @@
-import SibApiV3Sdk from "@sendinblue/client";
+import nodemailer from "nodemailer";
+
+let transporter;
+
+function smtpAuth() {
+    const user = process.env.SMTP_USER?.trim();
+    // Gmail app passwords are 16 chars; Google shows them with spaces.
+    const pass = process.env.SMTP_PASS?.replace(/\s+/g, "") || "";
+    return { user, pass };
+}
+
+function getTransporter() {
+    if (transporter) return transporter;
+
+    const host = process.env.SMTP_HOST?.trim();
+    const port = Number(process.env.SMTP_PORT) || 587;
+    const { user, pass } = smtpAuth();
+
+    if (!host || !user || !pass) {
+        throw new Error("SMTP is not configured. Set SMTP_HOST, SMTP_USER, and SMTP_PASS.");
+    }
+
+    transporter = nodemailer.createTransport({
+        host,
+        port,
+        secure: port === 465,
+        requireTLS: port === 587,
+        auth: { user, pass },
+    });
+
+    return transporter;
+}
+
+export function resetEmailTransporter() {
+    transporter = null;
+}
 
 const sendEmail = async (options) => {
-    const apiKey = process.env.BREVO_API_KEY?.trim();
-    const fromEmail = process.env.FROM_EMAIL?.trim();
-    if (!apiKey) {
-        throw new Error("BREVO_API_KEY is required to send email.");
-    }
+    const { user } = smtpAuth();
+    const fromEmail =
+        process.env.SMTP_FROM_EMAIL?.trim() || user;
+    const fromName = options.fromName?.trim() || process.env.SMTP_FROM_NAME?.trim() || "ProgZ Academy";
+
     if (!fromEmail) {
-        throw new Error("FROM_EMAIL is required to send email.");
+        throw new Error("SMTP_FROM_EMAIL or SMTP_USER is required to send email.");
+    }
+    if (!options?.email) {
+        throw new Error("Recipient email is required.");
     }
 
-    const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
-
-    // Set API key from environment variable
-    apiInstance.setApiKey(
-        SibApiV3Sdk.TransactionalEmailsApiApiKeys.apiKey,
-        apiKey
-    );
-
-    const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
-
-    sendSmtpEmail.sender = {
-        name: "Progz Support",
-        email: fromEmail,
-    };
-    sendSmtpEmail.to = [{ email: options.email }];
-    sendSmtpEmail.subject = options.subject;
-    sendSmtpEmail.htmlContent = options.html;
-
-    if (options.message) {
-        sendSmtpEmail.textContent = options.message;
+    try {
+        await getTransporter().sendMail({
+            from: { name: fromName, address: fromEmail },
+            replyTo: fromEmail,
+            to: options.email,
+            subject: options.subject,
+            text: options.message || undefined,
+            html: options.html || undefined,
+            envelope: {
+                from: user || fromEmail,
+                to: options.email,
+            },
+        });
+    } catch (err) {
+        if (err.code === "EAUTH" || err.responseCode === 535) {
+            resetEmailTransporter();
+            throw new Error(
+                "Gmail rejected the SMTP login. Create a new App Password for this Gmail account, put it in SMTP_PASS in .env, then restart the backend."
+            );
+        }
+        throw err;
     }
-
-    await apiInstance.sendTransacEmail(sendSmtpEmail);
 };
 
 export default sendEmail;

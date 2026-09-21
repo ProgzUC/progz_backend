@@ -7,6 +7,7 @@ import crypto from "crypto";
 import SyncLog from "../models/SyncLog.js";
 import sendEmail from "../utils/sendEmail.js";
 import { logAuditAction } from "../utils/auditLogger.js";
+import { notifySyncFailed } from "../services/notificationService.js";
 
 const randomUnusablePassword = async () => {
     const raw = crypto.randomBytes(32).toString("hex");
@@ -319,20 +320,21 @@ export const runCompleteSync = async (
 
         // Trigger email failure alert
         await sendSyncFailureEmail(syncLog);
+        notifySyncFailed(syncLog);
 
         throw err;
     }
 };
 
-// Send email alert on sync failures (Brevo)
+// Send email alert on sync failures (SMTP)
 const sendSyncFailureEmail = async (syncLog) => {
     const adminEmail = process.env.ADMIN_EMAIL;
     if (!adminEmail) {
         console.warn("ADMIN_EMAIL is not set; skipping sync failure email");
         return;
     }
-    if (!process.env.BREVO_API_KEY?.trim() || !process.env.FROM_EMAIL?.trim()) {
-        console.warn("BREVO_API_KEY / FROM_EMAIL not set; skipping sync failure email");
+    if (!process.env.SMTP_HOST?.trim() || !process.env.SMTP_USER?.trim() || !process.env.SMTP_PASS?.trim()) {
+        console.warn("SMTP is not configured; skipping sync failure email");
         return;
     }
     const subject = `⚠️ Progz Alert: Zen CRM Sync Failed`;

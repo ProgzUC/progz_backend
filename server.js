@@ -21,6 +21,7 @@ import uploadRoutes from "./routes/uploadRoutes.js";
 import reportRoutes from "./routes/reportRoutes.js";
 import { initCronJobs } from "./jobs/cronJobs.js";
 import monitoringRoutes from "./routes/monitoringRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
 import { requestLogger } from "./middlewares/loggingMiddleware.js";
 import { monitorMiddleware } from "./middlewares/monitorMiddleware.js";
 import { errorHandler, registerProcessErrorHandlers } from "./middlewares/errorMiddleware.js";
@@ -130,6 +131,7 @@ app.use("/api/admin/reports", reportRoutes);
 app.use("/api/class-session", classSessionRoutes);
 app.use("/api/uploads", uploadRoutes);
 app.use("/api/admin/monitoring", monitoringRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // Debug: Log that class session routes are loaded
 console.log("✅ Class session routes registered at /api/class-session");

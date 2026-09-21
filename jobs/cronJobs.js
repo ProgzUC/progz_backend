@@ -3,6 +3,11 @@ import { runCompleteSync } from "../services/syncService.js";
 import { isZenConfigured } from "../services/apiClient.js";
 import metricsTracker from "../utils/metricsTracker.js";
 import SystemMetric from "../models/SystemMetric.js";
+import {
+  runClassReminders,
+  runAttendanceWarnings,
+  runWeeklyAdminDigest,
+} from "./notificationJobs.js";
 
 // Helper to seed metrics if empty, for a premium loaded-chart experience
 const seedHistoricalMetricsIfEmpty = async () => {
@@ -84,5 +89,34 @@ export const initCronJobs = () => {
         }
     });
 
-    console.log('⏰ Cron jobs initialized (Sync: 30m, Metrics: 1h)');
+    // Class reminders ~30 minutes before scheduled start
+    cron.schedule("*/10 * * * *", async () => {
+        try {
+            await runClassReminders();
+        } catch (error) {
+            console.error("❌ Class reminder job failed:", error);
+        }
+    });
+
+    // Daily attendance warnings at 18:00 IST
+    cron.schedule("0 18 * * *", async () => {
+        console.log("⏳ Running attendance warning scan...");
+        try {
+            await runAttendanceWarnings();
+            console.log("✅ Attendance warning scan complete");
+        } catch (error) {
+            console.error("❌ Attendance warning job failed:", error);
+        }
+    }, { timezone: "Asia/Kolkata" });
+
+    // Weekly admin digest Monday 09:00 IST
+    cron.schedule("0 9 * * 1", async () => {
+        try {
+            await runWeeklyAdminDigest();
+        } catch (error) {
+            console.error("❌ Weekly digest job failed:", error);
+        }
+    }, { timezone: "Asia/Kolkata" });
+
+    console.log("⏰ Cron jobs initialized (Sync: 30m, Metrics: 1h, Reminders: 10m, Attendance: 18:00 IST, Digest: Mon 09:00 IST)");
 };

@@ -2,6 +2,7 @@ import { Router } from "express";
 const router = Router();
 import { protect, authorizeRoles } from "../middlewares/authMiddleware.js";
 import { getStudentProfile, updateStudentProfile, changePassword, getStudentCourses, getCourseProgress } from "../controllers/studentController.js";
+import { listPortalAnnouncements } from "../controllers/announcementController.js";
 import { submissionRateLimit } from "../middlewares/rateLimit.js";
 import { validate, changePasswordSchema } from "../middlewares/validate.js";
 
@@ -97,5 +98,6 @@ router.get("/my-courses", protect, authorizeRoles("student"), getStudentCourses)
  *         description: Progress retrieved
  */
 router.get("/course/:courseId/progress", protect, authorizeRoles("student"), getCourseProgress);
+router.get("/announcements", protect, authorizeRoles("student"), listPortalAnnouncements);
 
 export default router;

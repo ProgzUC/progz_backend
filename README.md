@@ -24,6 +24,11 @@ Welcome to the Progz Backend API documentation. This project handles course mana
 - Trainer Module Assignment
 - Section Completion Tracking
 
+### [Notifications](NOTIFICATION_README.md)
+- Approval / rejection, batch assignment, class reminders
+- Attendance warnings and admin events
+- Email + in-app delivery and user preferences
+
 ## 🚀 Getting Started
 
 1. **Install Dependencies**

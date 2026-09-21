@@ -1,6 +1,7 @@
 import express from "express";
 import { authorizeRoles, protect } from "../middlewares/authMiddleware.js";
 import { trainerBootstrap, getTrainerBatchDetails, toggleSectionCompletion, getTrainerCourses, getTrainerprofile, updateTrainerprofile } from "../controllers/trainerController.js";
+import { listPortalAnnouncements } from "../controllers/announcementController.js";
 
 
 const router = express.Router();
@@ -96,6 +97,7 @@ router.get("/trainer-courses", protect, authorizeRoles("trainer"), getTrainerCou
  */
 router.get("/trainer-profile", protect, authorizeRoles("trainer"), getTrainerprofile);
 router.put("/trainer-profile", protect, authorizeRoles("trainer"), updateTrainerprofile);
+router.get("/announcements", protect, authorizeRoles("trainer"), listPortalAnnouncements);
 
 export default router; 
 

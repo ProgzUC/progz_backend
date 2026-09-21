@@ -238,14 +238,22 @@ export const getRecentActivity = async (req, res) => {
   }
 };
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const parseAnnouncementEmails = (raw) => {
+  const values = Array.isArray(raw) ? raw : String(raw || "").split(/[,;]+/);
+  const unique = [...new Set(values.map((v) => String(v || "").trim().toLowerCase()).filter(Boolean))];
+  return unique.filter((email) => EMAIL_RE.test(email));
+};
+
 export const sendAnnouncementEmail = async (req, res) => {
   try {
-    const email = String(req.body?.email || "").trim().toLowerCase();
+    const emails = parseAnnouncementEmails(req.body?.email || req.body?.emails);
     const title = String(req.body?.title || "").trim();
     const body = String(req.body?.body || "").trim();
     const academy = String(req.body?.academyName || "ProgZ").trim() || "ProgZ";
 
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (emails.length === 0) {
       return res.status(400).json({ message: "Enter a valid email address" });
     }
     if (!title) {
@@ -254,25 +262,45 @@ export const sendAnnouncementEmail = async (req, res) => {
 
     const sendEmail = (await import("../utils/sendEmail.js")).default;
     const safeTitle = title.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const safeBody = (body || "No additional details.")
+    const safeAcademy = academy.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const safeBody = (body || "Please check the portal for details.")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
       .replace(/\n/g, "<br/>");
 
-    await sendEmail({
-      email,
-      subject: `${academy}: ${title}`,
-      message: `${academy} Announcement\n\n${title}\n\n${body || ""}`,
-      html: `
-        <div style="font-family:Arial,sans-serif;line-height:1.5;color:#0f172a">
-          <p style="margin:0 0 8px;font-size:12px;letter-spacing:0.06em;text-transform:uppercase;color:#64748b">${academy} Announcement</p>
-          <h2 style="margin:0 0 12px;font-size:20px">${safeTitle}</h2>
-          <p style="margin:0;color:#334155">${safeBody}</p>
-        </div>
-      `,
-    });
+    const html = `
+<!DOCTYPE html>
+<html>
+  <body style="margin:0;padding:24px;background:#ffffff;color:#111827;font-family:Georgia,'Times New Roman',serif;font-size:16px;line-height:1.6;">
+    <p style="margin:0 0 16px;">Hi,</p>
+    <p style="margin:0 0 16px;">This is a note from ${safeAcademy}.</p>
+    <p style="margin:0 0 8px;"><strong>${safeTitle}</strong></p>
+    <p style="margin:0 0 24px;">${safeBody}</p>
+    <p style="margin:0 0 24px;">Thanks,<br/>The ${safeAcademy} team</p>
+    <p style="margin:0;font-size:12px;color:#6b7280;font-family:Arial,sans-serif;">
+      You received this email because an admin sent you a notice from the ${safeAcademy} portal.
+    </p>
+  </body>
+</html>`;
+    const message = `Hi,\n\nThis is a note from ${academy}.\n\n${title}\n\n${body || "Please check the portal for details."}\n\nThanks,\nThe ${academy} team\n`;
 
-    return res.json({ message: "Announcement email sent", email });
+    for (const email of emails) {
+      await sendEmail({
+        email,
+        subject: `${title} — ${academy}`,
+        message,
+        html,
+        fromName: academy,
+      });
+    }
+
+    return res.json({
+      message: emails.length === 1
+        ? "Announcement email sent"
+        : `Announcement email sent to ${emails.length} recipients`,
+      email: emails[0],
+      emails,
+    });
   } catch (err) {
     console.error("sendAnnouncementEmail error", err);
     return res.status(500).json({

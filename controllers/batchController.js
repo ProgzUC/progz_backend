@@ -17,6 +17,12 @@ import {
   findSectionProgressIndex,
   matchesSectionProgress,
 } from "../utils/batchCourses.js";
+import {
+  notifyBatchAssigned,
+  notifyBatchRemoved,
+  notifyBatchStatusChanged,
+  notifyUserApproved,
+} from "../services/notificationService.js";
 
 const enrollStudentIntoCourses = async (student, batchId, courseIds) => {
   for (const courseId of courseIds) {
@@ -169,6 +175,15 @@ export const createBatch = async (req, res) => {
         if (!student) continue;
         await enrollStudentIntoCourses(student, batch._id, courseIds);
       }
+      notifyBatchAssigned({ users: students, batch, assignedAs: "student" });
+    }
+
+    if (trainers.length) {
+      notifyBatchAssigned({
+        users: trainers.map((t) => t.trainer),
+        batch,
+        assignedAs: "trainer",
+      });
     }
 
     res.status(201).json({
@@ -252,6 +267,7 @@ export const enrollStudent = async (req, res) => {
         if (!alreadyInBatch) {
             batch.students.push(studentId);
             await batch.save();
+            notifyBatchAssigned({ users: [student], batch, assignedAs: "student" });
         }
 
         const courseIds = getBatchCourseIds(batch);
@@ -307,6 +323,10 @@ export const removeStudent = async (req, res) => {
             await student.save();
         }
 
+        if (student) {
+            notifyBatchRemoved({ users: [student], batch });
+        }
+
         await logAuditAction({
             req,
             action: "unenroll_student",
@@ -349,9 +369,17 @@ export const manageTrainers = async (req, res) => {
             }
         }
 
+        const previousTrainerIds = (batch.trainers || []).map((t) => String(t.trainer));
+
         // Replace trainer list with new assignment
         batch.trainers = trainers;
         await batch.save();
+
+        const nextTrainerIds = trainers.map((t) => String(t.trainer));
+        const addedTrainers = nextTrainerIds.filter((id) => !previousTrainerIds.includes(id));
+        if (addedTrainers.length) {
+            notifyBatchAssigned({ users: addedTrainers, batch, assignedAs: "trainer" });
+        }
 
         res.json({ msg: "Trainers updated successfully", batch });
     } catch (error) {
@@ -486,6 +514,10 @@ export const updateBatch = async (req, res) => {
       return denyAccess(res, "You do not have permission to update this batch");
     }
 
+    const previousStudentIds = (batch.students || []).map(String);
+    const previousTrainerIds = (batch.trainers || []).map((t) => String(t.trainer));
+    const previousStatus = batch.status;
+
     // Apply updates
     const allowedFields = [
       "name",
@@ -538,6 +570,33 @@ export const updateBatch = async (req, res) => {
         if (!student) continue;
         await enrollStudentIntoCourses(student, batch._id, courseIds);
       }
+      const addedStudents = updates.students.map(String).filter((id) => !previousStudentIds.includes(id));
+      const removedStudents = previousStudentIds.filter((id) => !updates.students.map(String).includes(id));
+      if (addedStudents.length) {
+        notifyBatchAssigned({ users: addedStudents, batch, assignedAs: "student" });
+      }
+      if (removedStudents.length) {
+        notifyBatchRemoved({ users: removedStudents, batch });
+      }
+    }
+
+    if (updates.trainers) {
+      const nextTrainerIds = (batch.trainers || []).map((t) => String(t.trainer));
+      const addedTrainers = nextTrainerIds.filter((id) => !previousTrainerIds.includes(id));
+      if (addedTrainers.length) {
+        notifyBatchAssigned({ users: addedTrainers, batch, assignedAs: "trainer" });
+      }
+    }
+
+    if (updates.status !== undefined && previousStatus !== batch.status) {
+      notifyBatchStatusChanged({
+        batch,
+        previousStatus,
+        userIds: [
+          ...(batch.students || []).map((id) => String(id)),
+          ...(batch.trainers || []).map((t) => String(t.trainer)),
+        ],
+      });
     }
 
     res.json({
@@ -564,6 +623,7 @@ export const bulkEnrollStudents = async (req, res) => {
         const finalStudentIds = new Set();
         let approvedCount = 0;
         const errors = [];
+        const approvedUsers = [];
 
         // 1. Resolve active student IDs
         for (const sId of studentIds) {
@@ -593,6 +653,7 @@ export const bulkEnrollStudents = async (req, res) => {
                         userData.email = normalizedEmail;
                         activeUser = await User.create(userData);
                         approvedCount++;
+                        approvedUsers.push(activeUser);
                     }
                     finalStudentIds.add(String(activeUser._id));
                     await PendingUser.findByIdAndDelete(pId);
@@ -625,6 +686,7 @@ export const bulkEnrollStudents = async (req, res) => {
                     userData.email = email;
                     activeUser = await User.create(userData);
                     approvedCount++;
+                    approvedUsers.push(activeUser);
                     finalStudentIds.add(String(activeUser._id));
                     await PendingUser.findByIdAndDelete(pendingUser._id);
                     continue;
@@ -637,6 +699,7 @@ export const bulkEnrollStudents = async (req, res) => {
         }
 
         // 4. Enroll resolved students
+        const newlyEnrolled = [];
         let enrolledCount = 0;
         for (const sId of finalStudentIds) {
             try {
@@ -649,6 +712,7 @@ export const bulkEnrollStudents = async (req, res) => {
                 if (!alreadyInBatch) {
                     batch.students.push(sId);
                     enrolledCount++;
+                    newlyEnrolled.push(student);
                 }
 
                 const courseIds = getBatchCourseIds(batch);
@@ -674,6 +738,11 @@ export const bulkEnrollStudents = async (req, res) => {
 
         if (enrolledCount > 0) {
             await batch.save();
+            notifyBatchAssigned({ users: newlyEnrolled, batch, assignedAs: "student" });
+        }
+
+        for (const user of approvedUsers) {
+            notifyUserApproved(user);
         }
 
         res.json({

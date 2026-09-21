@@ -39,6 +39,17 @@ const userSchema = new mongoose.Schema(
         batch: { type: mongoose.Schema.Types.ObjectId, ref: "Batch" }
       }
     ],
+
+    notificationPrefs: {
+      inAppEnabled: { type: Boolean, default: true },
+      emailEnabled: { type: Boolean, default: true },
+      approvalAlerts: { type: Boolean, default: true },
+      batchAssignment: { type: Boolean, default: true },
+      classReminders: { type: Boolean, default: true },
+      attendanceWarnings: { type: Boolean, default: true },
+      adminEvents: { type: Boolean, default: true },
+      emailDigest: { type: Boolean, default: true },
+    },
   },
   { timestamps: true }
 );

@@ -1,6 +1,7 @@
 import ClassSession from "../models/ClassSession.js";
 import Batch from "../models/Batch.js";
 import { canManageBatch, denyAccess } from "../utils/authorizationHelpers.js";
+import { warnAtRiskStudents } from "../jobs/notificationJobs.js";
 
 /** Minutes after session start before a join is marked Late */
 const LATE_GRACE_MINUTES = 10;
@@ -284,6 +285,11 @@ export async function endClass(req, res) {
             session.notes = notes;
         }
         await session.save();
+
+        const studentIds = (session.attendance || []).map((entry) => entry.student);
+        warnAtRiskStudents(studentIds).catch((err) => {
+            console.error("Attendance warning after class end failed:", err);
+        });
 
         // Calculate duration
         const duration = Math.floor((session.endTime - session.startTime) / 1000 / 60); // minutes
