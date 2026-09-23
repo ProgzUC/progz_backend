@@ -1,8 +1,9 @@
 import express from "express";
 import { registerUser, adminCreateUser, approveUser, getAllPendingUsers, rejectUser, deleteUser, updateUser, getUser, getAllUsers } from "../controllers/userController.js";
+import { bulkImportStudents } from "../controllers/bulkImportController.js";
 import { protect, authorizeRoles } from "../middlewares/authMiddleware.js";
 import { registrationRateLimit, submissionRateLimit } from "../middlewares/rateLimit.js";
-import { validate, registerUserSchema } from "../middlewares/validate.js";
+import { validate, registerUserSchema, bulkImportStudentsSchema } from "../middlewares/validate.js";
 
 const router = express.Router();
 
@@ -51,6 +52,27 @@ router.post(
   authorizeRoles("admin"),
   submissionRateLimit,
   adminCreateUser
+);
+
+/**
+ * @swagger
+ * /users/bulk-import:
+ *   post:
+ *     summary: Bulk create/assign students to a batch and send welcome magic links
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Import summary
+ */
+router.post(
+  "/bulk-import",
+  protect,
+  authorizeRoles("admin"),
+  submissionRateLimit,
+  validate(bulkImportStudentsSchema),
+  bulkImportStudents
 );
 
 /**

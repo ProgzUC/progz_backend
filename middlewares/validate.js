@@ -229,6 +229,35 @@ export const forgotPasswordSchema = {
   allowUnknownBody: false,
 };
 
+export const magicLoginRequestSchema = {
+  body: {
+    email: fields.email,
+  },
+  allowUnknownBody: false,
+};
+
+export const magicLoginVerifySchema = {
+  params: {
+    token: fields.resetToken,
+  },
+  allowUnknownBody: true,
+};
+
+export const bulkImportStudentsSchema = {
+  body: {
+    batchId: fields.objectId,
+    sendWelcomeEmails: {
+      type: "boolean",
+      required: false,
+    },
+    students: {
+      type: "array",
+      required: true,
+    },
+  },
+  allowUnknownBody: false,
+};
+
 export const resetPasswordSchema = {
   params: {
     token: fields.resetToken,

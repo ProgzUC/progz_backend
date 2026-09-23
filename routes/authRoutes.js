@@ -7,6 +7,8 @@ import {
   forgotPassword,
   resetPassword,
   getMe,
+  requestMagicLogin,
+  verifyMagicLogin,
 } from "../controllers/authController.js";
 import { protect, authorizeRoles } from "../middlewares/authMiddleware.js";
 import { loginRateLimit } from "../middlewares/loginRateLimit.js";
@@ -22,6 +24,8 @@ import {
   forgotPasswordSchema,
   resetPasswordSchema,
   refreshSchema,
+  magicLoginRequestSchema,
+  magicLoginVerifySchema,
 } from "../middlewares/validate.js";
 
 const router = express.Router();
@@ -126,6 +130,18 @@ router.post(
   passwordResetRateLimit,
   validate(resetPasswordSchema),
   resetPassword
+);
+router.post(
+  "/magic-login",
+  emailRateLimit,
+  validate(magicLoginRequestSchema),
+  requestMagicLogin
+);
+router.post(
+  "/magic-login/:token",
+  loginRateLimit,
+  validate(magicLoginVerifySchema),
+  verifyMagicLogin
 );
 router.get("/me", protect, getMe);
 

@@ -23,37 +23,9 @@ import {
   notifyBatchStatusChanged,
   notifyUserApproved,
 } from "../services/notificationService.js";
+import { enrollStudentIntoCourses } from "../utils/batchEnrollment.js";
 
-const enrollStudentIntoCourses = async (student, batchId, courseIds) => {
-  for (const courseId of courseIds) {
-    const existing = student.enrolledCourses.find(
-      (e) => e.course?.toString() === courseId.toString()
-    );
-    if (existing) {
-      existing.batch = batchId;
-    } else {
-      student.enrolledCourses.push({
-        course: courseId,
-        batch: batchId,
-        enrolledAt: new Date(),
-      });
-    }
-
-    await Course.updateOne(
-      { _id: courseId, "enrolledStudents.student": { $ne: student._id } },
-      {
-        $push: {
-          enrolledStudents: {
-            student: student._id,
-            enrolledDate: new Date(),
-            batchId,
-          },
-        },
-      }
-    );
-  }
-  await student.save();
-};
+export { enrollStudentIntoCourses };
 
 /** When batch courses change, re-link every student to the new course set. */
 const syncBatchStudentsToCourses = async (batch, previousCourseIds = []) => {

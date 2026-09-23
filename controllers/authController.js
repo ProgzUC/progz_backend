@@ -24,6 +24,11 @@ import {
   recordLoginFailure,
 } from "../middlewares/loginRateLimit.js";
 import { sendError } from "../utils/apiError.js";
+import {
+  attachLoginToken,
+  hashToken,
+  sendMagicLoginEmail,
+} from "../utils/magicLogin.js";
 
 const buildAuthUser = (user) => ({
   id: user._id,
@@ -323,4 +328,72 @@ export const resetPassword = async (req, res) => {
   await user.save();
 
   res.json({ msg: "Password reset successful" });
+};
+
+/**
+ * Passwordless login: email a one-time magic link (students/trainers).
+ * Always returns a generic success message to avoid account enumeration.
+ */
+export const requestMagicLogin = async (req, res) => {
+  const { email } = req.body;
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+
+  try {
+    const user = await User.findOne({ email: normalizedEmail });
+    if (user && user.role !== "admin") {
+      const rawToken = attachLoginToken(user, 15 * 60 * 1000);
+      await user.save();
+      try {
+        await sendMagicLoginEmail({ user, rawToken });
+      } catch (mailErr) {
+        console.error("Magic login email error:", mailErr);
+        user.loginToken = undefined;
+        user.loginTokenExpires = undefined;
+        await user.save();
+        return res.status(500).json({ msg: "Email could not be sent" });
+      }
+    }
+    return res.json({
+      msg: "If an account exists for that email, a login link has been sent.",
+    });
+  } catch (error) {
+    return res.status(500).json({ msg: error.message });
+  }
+};
+
+/**
+ * Consume a one-time magic login token and issue an auth session.
+ */
+export const verifyMagicLogin = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const rateLimitKey = res.locals.loginRateLimitKey;
+    const hashedToken = hashToken(token);
+
+    const user = await User.findOne({
+      loginToken: hashedToken,
+      loginTokenExpires: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      recordLoginFailure(rateLimitKey);
+      return sendError(res, 400, "Invalid or expired login link", {
+        code: "INVALID_MAGIC_LINK",
+      });
+    }
+
+    user.loginToken = undefined;
+    user.loginTokenExpires = undefined;
+    await user.save();
+
+    clearAuthCookies(res);
+    const sessionData = await issueAuthSession(res, user);
+    clearLoginFailures(rateLimitKey);
+    res.json({
+      ...sessionData,
+      msg: "Login successful",
+    });
+  } catch (error) {
+    res.status(500).json({ msg: error.message });
+  }
 };

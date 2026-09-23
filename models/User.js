@@ -29,6 +29,9 @@ const userSchema = new mongoose.Schema(
     },
     resetPasswordToken: String,
     resetPasswordExpires: Date,
+    /** One-time passwordless login link (SHA-256 hash of raw token). */
+    loginToken: String,
+    loginTokenExpires: Date,
     refreshTokenHash: String,
     refreshTokenExpires: Date,
 
