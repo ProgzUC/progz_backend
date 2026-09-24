@@ -19,7 +19,33 @@ const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
 const normalizeName = (value) => String(value || "").trim().slice(0, 120);
 
 /**
- * Admin bulk import: create passwordless student accounts, assign to batch, send welcome magic links.
+ * Send welcome emails after the HTTP response so SMTP cannot block / timeout the import.
+ */
+const sendWelcomeEmailsInBackground = (pendingEmails, batchName) => {
+  if (!pendingEmails.length) return;
+
+  setImmediate(() => {
+    void (async () => {
+      for (const item of pendingEmails) {
+        try {
+          await sendWelcomeInviteEmail({
+            user: { email: item.email, name: item.name },
+            batchName,
+            rawToken: item.rawToken,
+          });
+        } catch (mailErr) {
+          console.error(
+            `[bulk-import] welcome email failed for ${item.email}:`,
+            mailErr?.message || mailErr
+          );
+        }
+      }
+    })();
+  });
+};
+
+/**
+ * Admin bulk import: create passwordless student accounts, assign to batch, queue welcome emails.
  * Body: { batchId, students: [{ name?, email }], sendWelcomeEmails?: boolean }
  */
 export const bulkImportStudents = async (req, res) => {
@@ -53,11 +79,12 @@ export const bulkImportStudents = async (req, res) => {
       alreadyExisting: 0,
       assigned: 0,
       alreadyAssigned: 0,
-      emailsSent: 0,
+      emailsQueued: 0,
       failed: 0,
     };
     const errors = [];
     const newlyAssignedUsers = [];
+    const pendingEmails = [];
     const seenInFile = new Set();
     const courseIds = getBatchCourseIds(batch);
 
@@ -152,25 +179,17 @@ export const bulkImportStudents = async (req, res) => {
 
         await enrollStudentIntoCourses(user, batch._id, courseIds);
 
-        let welcomeSent = false;
+        let welcomeQueued = false;
         if (sendWelcomeEmails) {
-          try {
-            const rawToken = attachLoginToken(user);
-            await user.save();
-            await sendWelcomeInviteEmail({
-              user,
-              batchName: batch.name,
-              rawToken,
-            });
-            summary.emailsSent += 1;
-            welcomeSent = true;
-          } catch (mailErr) {
-            errors.push({
-              row: rowNum,
-              email,
-              reason: `Account ready but welcome email failed: ${mailErr.message}`,
-            });
-          }
+          const rawToken = attachLoginToken(user);
+          await user.save();
+          pendingEmails.push({
+            email,
+            name: user.name,
+            rawToken,
+          });
+          summary.emailsQueued += 1;
+          welcomeQueued = true;
         }
 
         await logAuditAction({
@@ -183,7 +202,7 @@ export const bulkImportStudents = async (req, res) => {
             studentId: user._id,
             studentEmail: email,
             wasCreated,
-            welcomeSent,
+            welcomeQueued,
           },
         });
       } catch (err) {
@@ -206,18 +225,24 @@ export const bulkImportStudents = async (req, res) => {
     }
 
     res.json({
-      msg: "Bulk student import completed",
+      msg: sendWelcomeEmails
+        ? "Bulk student import completed. Welcome emails are sending in the background."
+        : "Bulk student import completed",
       summary: {
         totalStudents: summary.total,
         successfullyCreated: summary.created,
         alreadyExisting: summary.alreadyExisting,
         successfullyAssigned: summary.assigned,
         alreadyAssigned: summary.alreadyAssigned,
-        welcomeEmailsSent: summary.emailsSent,
+        // Keep welcomeEmailsSent for older UI; value is queued count when emails are async
+        welcomeEmailsSent: summary.emailsQueued,
+        welcomeEmailsQueued: summary.emailsQueued,
         failedRecords: summary.failed,
       },
       errors,
     });
+
+    sendWelcomeEmailsInBackground(pendingEmails, batch.name);
   } catch (error) {
     res.status(500).json({ msg: "Server error", error: error.message });
   }
