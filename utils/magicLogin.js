@@ -1,10 +1,8 @@
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
-import sendWithBrevo from "./sendWithBrevo.js";
-import sendEmail from "./sendEmail.js";
+import { deliverMail, frontendBaseUrl } from "./deliverMail.js";
 
-const FRONTEND_URL = () =>
-  (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
+const FRONTEND_URL = () => frontendBaseUrl();
 
 export const hashToken = (rawToken) =>
   crypto.createHash("sha256").update(rawToken).digest("hex");
@@ -112,23 +110,7 @@ const magicLoginHtml = ({ name, loginLink }) => `
 `;
 
 async function deliverEmail({ email, subject, html }) {
-  const hasBrevo = Boolean(process.env.BREVO_API_KEY?.trim() && process.env.FROM_EMAIL?.trim());
-  if (hasBrevo) {
-    await sendWithBrevo({
-      email,
-      subject,
-      html,
-      senderName: "ProgZ Academy",
-      senderEmail: process.env.FROM_EMAIL,
-    });
-    return;
-  }
-  await sendEmail({
-    email,
-    subject,
-    html,
-    message: subject,
-  });
+  await deliverMail({ email, subject, html, senderName: "ProgZ Academy" });
 }
 
 export async function sendWelcomeInviteEmail({ user, batchName, rawToken }) {

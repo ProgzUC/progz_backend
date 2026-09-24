@@ -17,7 +17,7 @@ import {
   verifyStoredRefreshToken,
   revokeRefreshToken,
 } from "../utils/refreshTokenStore.js";
-import sendWithBrevo from "../utils/sendWithBrevo.js";
+import { deliverMail, frontendBaseUrl } from "../utils/deliverMail.js";
 import { validatePassword } from "../utils/passwordValidation.js";
 import {
   clearLoginFailures,
@@ -201,7 +201,7 @@ export const forgotPassword = async (req, res) => {
   user.resetPasswordExpires = Date.now() + 15 * 60 * 1000; // 15 mins
   await user.save();
 
-  const resetLink = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+  const resetLink = `${frontendBaseUrl()}/reset-password/${resetToken}`;
 
   const message = `
     <!DOCTYPE html>
@@ -276,22 +276,25 @@ export const forgotPassword = async (req, res) => {
   `;
 
   try {
-    await sendWithBrevo({
+    await deliverMail({
       email: user.email,
       subject: "Password Reset Request",
       html: message,
-      senderName: "Progz Support",
-      senderEmail: process.env.FROM_EMAIL,
+      text: `Reset your password: ${resetLink}`,
+      senderName: "ProgZ Academy",
     });
 
     res.json({ msg: "Password reset link sent" });
   } catch (error) {
-    console.error("Email send error:", error);
+    console.error("Email send error:", error?.message || error);
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
     await user.save();
 
-    return res.status(500).json({ msg: "Email could not be sent" });
+    return res.status(500).json({
+      msg: "Email could not be sent",
+      error: error?.message || "Mail provider error",
+    });
   }
 
 };
