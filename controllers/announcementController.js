@@ -1,4 +1,6 @@
+import mongoose from "mongoose";
 import User from "../models/User.js";
+import Batch from "../models/Batch.js";
 import Announcement from "../models/Announcement.js";
 import sendEmail from "../utils/sendEmail.js";
 import { notifyAnnouncementInApp } from "../services/notificationService.js";
@@ -22,13 +24,36 @@ const escapeHtml = (value) =>
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 
+const toIdList = (raw) => {
+  const values = Array.isArray(raw) ? raw : raw != null ? [raw] : [];
+  return [
+    ...new Set(
+      values
+        .map((v) => String(v?._id || v || "").trim())
+        .filter((id) => mongoose.Types.ObjectId.isValid(id))
+    ),
+  ];
+};
+
 const serializeAnnouncement = (doc) => {
   const item = typeof doc.toObject === "function" ? doc.toObject() : doc;
+  const recipientIds = (item.recipientIds || []).map((id) => String(id));
   return {
     id: String(item._id),
     title: item.title,
     body: item.body || "",
     audience: item.audience,
+    scope: item.scope || "portal",
+    batchId: item.batch ? String(item.batch) : null,
+    recipientIds,
+    recipientCount: recipientIds.length,
+    recipients: Array.isArray(item.recipients)
+      ? item.recipients.map((u) => ({
+          id: String(u._id || u.id),
+          name: u.name || "",
+          email: u.email || "",
+        }))
+      : undefined,
     extraEmails: item.extraEmails || [],
     active: item.active !== false,
     emailStatus: item.emailStatus,
@@ -37,6 +62,16 @@ const serializeAnnouncement = (doc) => {
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   };
+};
+
+const assertTrainerOwnsBatch = async (batchId, trainerId) => {
+  if (!mongoose.Types.ObjectId.isValid(batchId)) return null;
+  return Batch.findOne({
+    _id: batchId,
+    "trainers.trainer": trainerId,
+  })
+    .select("students name")
+    .lean();
 };
 
 const rolesForAudience = (audience) => {
@@ -87,7 +122,7 @@ const buildAnnouncementMail = ({ title, body, academy }) => {
     <p style="margin:0 0 24px;">${safeBody}</p>
     <p style="margin:0 0 24px;">Thanks,<br/>The ${safeAcademy} team</p>
     <p style="margin:0;font-size:12px;color:#6b7280;font-family:Arial,sans-serif;">
-      You received this email because an admin sent you a notice from the ${safeAcademy} portal.
+      You received this email because a notice was sent to you from the ${safeAcademy} portal.
     </p>
   </body>
 </html>`,
@@ -187,6 +222,7 @@ export const createAnnouncement = async (req, res) => {
       title,
       body,
       audience,
+      scope: "portal",
       extraEmails,
       active: true,
       createdBy: req.user?.id,
@@ -296,13 +332,35 @@ export const deleteAnnouncement = async (req, res) => {
 export const listPortalAnnouncements = async (req, res) => {
   try {
     const role = String(req.user?.role || "").toLowerCase();
+    const userId = req.user?.id;
+    const portalMatch = {
+      $and: [
+        {
+          $or: [
+            { scope: "portal" },
+            { scope: { $exists: false } },
+            { scope: null },
+          ],
+        },
+        { audience: audienceQueryForRole(role) },
+      ],
+    };
+
+    const orClauses = [portalMatch];
+    if (role === "student" && userId) {
+      orClauses.push({
+        scope: "batch",
+        recipientIds: userId,
+      });
+    }
+
     const items = await Announcement.find({
       active: true,
-      audience: audienceQueryForRole(role),
+      $or: orClauses,
     })
       .sort({ createdAt: -1 })
-      .limit(8)
-      .select("title body audience createdAt academyName")
+      .limit(12)
+      .select("title body audience scope batch createdAt academyName")
       .lean();
 
     return res.json({
@@ -311,6 +369,7 @@ export const listPortalAnnouncements = async (req, res) => {
         title: item.title,
         body: item.body || "",
         audience: item.audience,
+        scope: item.scope || "portal",
         createdAt: item.createdAt,
         academyName: item.academyName,
       })),
@@ -318,5 +377,232 @@ export const listPortalAnnouncements = async (req, res) => {
   } catch (err) {
     console.error("listPortalAnnouncements error", err);
     return res.status(500).json({ message: "Failed to load announcements" });
+  }
+};
+
+/**
+ * Trainer: announce to selected students in a batch they own.
+ * Body: { title, body, studentIds: string[], sendEmail?: boolean, academyName?: string }
+ */
+export const createTrainerAnnouncement = async (req, res) => {
+  try {
+    const trainerId = req.user?.id;
+    const { batchId } = req.params;
+    const title = String(req.body?.title || "").trim();
+    const body = String(req.body?.body || "").trim();
+    const academy = String(req.body?.academyName || "ProgZ").trim() || "ProgZ";
+    const sendEmailFlag = req.body?.sendEmail !== false;
+    const selectedIds = toIdList(req.body?.studentIds);
+
+    if (!title) {
+      return res.status(400).json({ message: "Announcement title is required" });
+    }
+    if (!selectedIds.length) {
+      return res.status(400).json({ message: "Select at least one student" });
+    }
+
+    const batch = await assertTrainerOwnsBatch(batchId, trainerId);
+    if (!batch) {
+      return res.status(404).json({ message: "Batch not found or you are not assigned to it" });
+    }
+
+    const batchStudentSet = new Set((batch.students || []).map((id) => String(id)));
+    const allowedIds = selectedIds.filter((id) => batchStudentSet.has(id));
+    if (!allowedIds.length) {
+      return res.status(400).json({
+        message: "Selected students must belong to this batch",
+      });
+    }
+
+    const recipients = await User.find({
+      _id: { $in: allowedIds },
+      role: "student",
+    })
+      .select("name email")
+      .lean();
+
+    if (!recipients.length) {
+      return res.status(400).json({ message: "No valid students found for the selection" });
+    }
+
+    const recipientIds = recipients.map((u) => u._id);
+    const emails = [
+      ...new Set(
+        recipients
+          .map((u) => String(u.email || "").trim().toLowerCase())
+          .filter((email) => EMAIL_RE.test(email))
+      ),
+    ];
+
+    const announcement = await Announcement.create({
+      title,
+      body,
+      audience: "custom",
+      scope: "batch",
+      batch: batchId,
+      recipientIds,
+      extraEmails: [],
+      active: true,
+      createdBy: trainerId,
+      academyName: academy,
+      emailStatus: sendEmailFlag && emails.length ? "sending" : "skipped",
+      emailStats: {
+        total: sendEmailFlag ? emails.length : 0,
+        sent: 0,
+        failed: 0,
+      },
+    });
+
+    notifyAnnouncementInApp({
+      userIds: recipientIds,
+      title,
+      body,
+      announcementId: announcement._id,
+    });
+
+    if (!sendEmailFlag || emails.length === 0) {
+      return res.status(201).json({
+        message: `Announcement sent to ${recipientIds.length} student${recipientIds.length === 1 ? "" : "s"}`,
+        announcement: serializeAnnouncement({
+          ...announcement.toObject(),
+          recipients,
+        }),
+        queued: false,
+      });
+    }
+
+    const finishSend = async () => {
+      const stats = await deliverAnnouncementEmails({
+        emails,
+        title,
+        body,
+        academy,
+      });
+      announcement.emailStats = stats;
+      announcement.emailStatus = stats.failed === stats.total ? "failed" : "sent";
+      announcement.markModified("emailStats");
+      await announcement.save();
+      return stats;
+    };
+
+    if (emails.length <= SYNC_SEND_LIMIT) {
+      const stats = await finishSend();
+      return res.status(201).json({
+        message:
+          stats.failed === 0
+            ? `Announcement sent to ${recipientIds.length} student${recipientIds.length === 1 ? "" : "s"} (${stats.sent} emailed)`
+            : `Announcement published. Emailed ${stats.sent}, failed ${stats.failed}`,
+        announcement: serializeAnnouncement({
+          ...announcement.toObject(),
+          recipients,
+        }),
+        queued: false,
+      });
+    }
+
+    finishSend().catch((err) => {
+      console.error("Background trainer announcement send failed", err);
+    });
+
+    return res.status(201).json({
+      message: `Announcement published. Emails are sending to ${emails.length} students.`,
+      announcement: serializeAnnouncement({
+        ...announcement.toObject(),
+        recipients,
+      }),
+      queued: true,
+    });
+  } catch (err) {
+    console.error("createTrainerAnnouncement error", err);
+    return res.status(500).json({
+      message: err.message || "Failed to publish announcement",
+    });
+  }
+};
+
+export const listTrainerBatchAnnouncements = async (req, res) => {
+  try {
+    const trainerId = req.user?.id;
+    const { batchId } = req.params;
+    const batch = await assertTrainerOwnsBatch(batchId, trainerId);
+    if (!batch) {
+      return res.status(404).json({ message: "Batch not found or you are not assigned to it" });
+    }
+
+    const items = await Announcement.find({
+      scope: "batch",
+      batch: batchId,
+      createdBy: trainerId,
+    })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .populate("recipientIds", "name email")
+      .lean();
+
+    return res.json({
+      items: items.map((item) =>
+        serializeAnnouncement({
+          ...item,
+          recipients: item.recipientIds || [],
+          recipientIds: (item.recipientIds || []).map((u) => u._id || u),
+        })
+      ),
+    });
+  } catch (err) {
+    console.error("listTrainerBatchAnnouncements error", err);
+    return res.status(500).json({ message: "Failed to load announcements" });
+  }
+};
+
+export const updateTrainerAnnouncement = async (req, res) => {
+  try {
+    const trainerId = req.user?.id;
+    const { id } = req.params;
+    const announcement = await Announcement.findOne({
+      _id: id,
+      scope: "batch",
+      createdBy: trainerId,
+    });
+    if (!announcement) {
+      return res.status(404).json({ message: "Announcement not found" });
+    }
+
+    if (typeof req.body?.active === "boolean") {
+      announcement.active = req.body.active;
+    }
+    if (typeof req.body?.title === "string" && req.body.title.trim()) {
+      announcement.title = req.body.title.trim();
+    }
+    if (typeof req.body?.body === "string") {
+      announcement.body = req.body.body.trim();
+    }
+
+    await announcement.save();
+    return res.json({
+      message: announcement.active ? "Announcement is visible to students" : "Announcement paused",
+      announcement: serializeAnnouncement(announcement),
+    });
+  } catch (err) {
+    console.error("updateTrainerAnnouncement error", err);
+    return res.status(500).json({ message: "Failed to update announcement" });
+  }
+};
+
+export const deleteTrainerAnnouncement = async (req, res) => {
+  try {
+    const trainerId = req.user?.id;
+    const { id } = req.params;
+    const deleted = await Announcement.findOneAndDelete({
+      _id: id,
+      scope: "batch",
+      createdBy: trainerId,
+    });
+    if (!deleted) {
+      return res.status(404).json({ message: "Announcement not found" });
+    }
+    return res.json({ message: "Announcement deleted" });
+  } catch (err) {
+    console.error("deleteTrainerAnnouncement error", err);
+    return res.status(500).json({ message: "Failed to delete announcement" });
   }
 };
