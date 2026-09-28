@@ -60,6 +60,7 @@ export const createRateLimiter = (options = {}) => {
   timer.unref?.();
 
   return (req, res, next) => {
+    if (process.env.NODE_ENV === "test") return next();
     if (typeof skip === "function" && skip(req)) {
       return next();
     }

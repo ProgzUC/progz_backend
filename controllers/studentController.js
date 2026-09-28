@@ -6,6 +6,127 @@ import { validatePassword } from "../utils/passwordValidation.js";
 import { revokeRefreshToken } from "../utils/refreshTokenStore.js";
 import { clearAuthCookies } from "../utils/cookieAuth.js";
 import { filterCompletedForCourse } from "../utils/batchCourses.js";
+import { isProperlyEnrolled } from "../utils/studentCourseAccess.js";
+import { getNextClassDate } from "../utils/getNextClassDate.js";
+
+function plainText(html) {
+    if (!html) return "";
+    return String(html)
+        .replace(/<br\s*\/?>/gi, " ")
+        .replace(/<[^>]*>/g, " ")
+        .replace(/&nbsp;/gi, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+function formatDurationLabel(hours, months) {
+    const parts = [];
+    const monthsNum = Number(months);
+    if (Number.isFinite(monthsNum) && monthsNum > 0) {
+        parts.push(`${monthsNum} month${monthsNum === 1 ? "" : "s"}`);
+    }
+    const hoursNum = Number(hours);
+    if (Number.isFinite(hoursNum) && hoursNum > 0) {
+        parts.push(`${hoursNum} hour${hoursNum === 1 ? "" : "s"}`);
+    }
+    return parts.join(" · ") || "Self-paced";
+}
+
+function resolveNextClassAt(batch) {
+    const startTime = batch?.classTiming?.startTime;
+    const days = Array.isArray(batch?.daysOfWeek) ? batch.daysOfWeek : [];
+    if (!startTime || days.length === 0) return null;
+    try {
+        const next = getNextClassDate(days, batch.classTiming);
+        return next ? next.toISOString() : null;
+    } catch {
+        return null;
+    }
+}
+
+function pickContinueLesson(modules) {
+    let first = null;
+    let lastReleased = null;
+    (modules || []).forEach((module, moduleIndex) => {
+        (module.sections || []).forEach((section, sectionIndex) => {
+            const lesson = {
+                moduleIndex,
+                sectionIndex,
+                title: section.sectionName || section.title || "Lesson",
+                moduleName: module.moduleName || module.title || "",
+            };
+            if (!first) first = lesson;
+            if (section.isCompleted) lastReleased = lesson;
+        });
+    });
+    return lastReleased || first;
+}
+
+function summarizeCatalogCourse(course, enrolledIds) {
+    const modules = course.modules || [];
+    const lessonCount = modules.reduce((acc, module) => acc + (module.sections?.length || 0), 0);
+    const instructors = (course.instructor || [])
+        .map((person) => (typeof person === "object" ? person.name : null))
+        .filter(Boolean);
+
+    return {
+        id: course._id,
+        courseId: course._id,
+        code: course.courseId,
+        title: course.courseName,
+        description: plainText(course.courseDescription),
+        thumbnail: course.thumbnail?.url || null,
+        durationLabel: formatDurationLabel(course.courseDuration, course.courseDurationMonths),
+        moduleCount: modules.length,
+        lessonCount,
+        instructors,
+        enrolled: enrolledIds.has(String(course._id)),
+    };
+}
+
+function pickContinueLearning(enrolledCourses) {
+    if (!enrolledCourses.length) return null;
+    const incomplete = enrolledCourses.filter((course) => (course.progressPercentage || 0) < 100);
+    const pool = incomplete.length ? incomplete : enrolledCourses;
+    const withProgress = pool.filter((course) => (course.progressPercentage || 0) > 0);
+    const ranked = (withProgress.length ? withProgress : pool).slice().sort((a, b) => {
+        const aNext = a.nextClassAt ? new Date(a.nextClassAt).getTime() : Number.POSITIVE_INFINITY;
+        const bNext = b.nextClassAt ? new Date(b.nextClassAt).getTime() : Number.POSITIVE_INFINITY;
+        if (aNext !== bNext) return aNext - bNext;
+        return (b.progressPercentage || 0) - (a.progressPercentage || 0);
+    });
+    const course = ranked[0];
+    return {
+        courseId: course.courseId,
+        courseName: course.courseName,
+        progressPercentage: course.progressPercentage,
+        completedLessons: course.completedLessons,
+        totalLessons: course.totalLessons,
+        batchId: course.batchId,
+        batchName: course.batchName,
+        lesson: course.continueLesson || null,
+        nextClassAt: course.nextClassAt || null,
+    };
+}
+
+function pickNextClass(enrolledCourses) {
+    const upcoming = enrolledCourses
+        .filter((course) => course.nextClassAt)
+        .slice()
+        .sort((a, b) => new Date(a.nextClassAt) - new Date(b.nextClassAt));
+    const course = upcoming[0];
+    if (!course) return null;
+    return {
+        courseId: course.courseId,
+        courseName: course.courseName,
+        batchId: course.batchId,
+        batchName: course.batchName,
+        nextClassAt: course.nextClassAt,
+        classTiming: course.classTiming,
+        daysOfWeek: course.daysOfWeek,
+        meetLink: course.meetLink,
+    };
+}
 
 /**
  * @desc    Get student profile
@@ -212,7 +333,7 @@ export async function getStudentCourses(req, res) {
 
         const user = await User.findById(studentId)
             .populate({ path: "enrolledCourses.course", select: "courseName modules thumbnail instructor" })
-            .populate({ path: "enrolledCourses.batch", select: "name sectionProgress meetLink classTiming daysOfWeek status course courses" })
+            .populate({ path: "enrolledCourses.batch", select: "name students sectionProgress meetLink classTiming daysOfWeek status course courses" })
             .lean();
 
         if (!user) return res.status(404).json({ message: "User not found" });
@@ -224,8 +345,9 @@ export async function getStudentCourses(req, res) {
             const courseDoc = ec.course;
             const batch = ec.batch;
 
-            // Skip deleted / missing courses (orphaned enrollment refs)
+            // Skip deleted courses and enrollments that are not on an active batch roster
             if (!courseDoc || !courseDoc._id) continue;
+            if (!isProperlyEnrolled(studentId, courseDoc._id, batch)) continue;
 
             const totalSections =
                 courseDoc?.modules?.reduce(
@@ -249,12 +371,26 @@ export async function getStudentCourses(req, res) {
                     ? Math.round((completedLessons / totalSections) * 100)
                     : 0;
 
+            const modules = (courseDoc?.modules || []).map((module, modIdx) => ({
+                moduleName: module.title,
+                title: module.title,
+                sections: (module.sections || []).map((section, secIdx) => {
+                    const isCompleted = completedList.some(
+                        c => c.moduleIndex === modIdx && c.sectionIndex === secIdx
+                    );
+
+                    return {
+                        sectionName: section.sectionName,
+                        title: section.sectionName,
+                        isCompleted,
+                    };
+                }),
+            }));
+
             enrolledCourses.push({
                 courseId: courseDoc?._id,
                 courseName: courseDoc?.courseName,
                 thumbnail: courseDoc?.thumbnail || null,
-                instructor: courseDoc?.instructor || "Instructor Name",
-                category: "Development",
                 courseImage: courseDoc?.thumbnail || null,
                 batchId: batch?._id || null,
                 batchName: batch?.name || null,
@@ -266,26 +402,17 @@ export async function getStudentCourses(req, res) {
                 totalLessons: totalSections,
                 completedLessons,
                 progressPercentage,
-
-                modules: (courseDoc?.modules || []).map((module, modIdx) => ({
-                    moduleName: module.title,
-                    title: module.title,
-                    sections: (module.sections || []).map((section, secIdx) => {
-                        const isCompleted = completedList.some(
-                            c => c.moduleIndex === modIdx && c.sectionIndex === secIdx
-                        );
-
-                        return {
-                            sectionName: section.sectionName,
-                            title: section.sectionName,
-                            isCompleted,
-                        };
-                    }),
-                })),
+                nextClassAt: resolveNextClassAt(batch),
+                continueLesson: pickContinueLesson(modules),
+                modules,
             });
         }
 
-        res.json({ enrolledCourses });
+        res.json({
+            enrolledCourses,
+            continueLearning: pickContinueLearning(enrolledCourses),
+            nextClass: pickNextClass(enrolledCourses),
+        });
     } catch (error) {
         console.error("Get courses error:", error);
         res.status(500).json({ message: "Failed to fetch courses" });
@@ -307,23 +434,17 @@ export async function getCourseProgress(req, res) {
         const user = await User.findById(studentId).lean();
         if (!user) return res.status(404).json({ message: 'User not found' });
 
+        const enrollment = (user.enrolledCourses || []).find(ec => String(ec.course) === String(courseId)) || null;
+        const batch = enrollment?.batch
+            ? await Batch.findById(enrollment.batch).lean()
+            : null;
+
+        if (!isProperlyEnrolled(studentId, courseId, batch)) {
+            return res.status(403).json({ message: "You are not enrolled in this course" });
+        }
+
         const course = await Course.findById(courseId).lean();
         if (!course) return res.status(404).json({ message: 'Course not found' });
-
-        // Find user's enrollment for this course (may contain batch reference)
-        const enrollment = (user.enrolledCourses || []).find(ec => String(ec.course) === String(courseId)) || null;
-
-        // Determine the batch to use for progress (prefer enrollment.batch)
-        let batch = null;
-        if (enrollment && enrollment.batch) {
-            batch = await Batch.findById(enrollment.batch).lean();
-        } else {
-            // fallback: find any batch for this course that includes the student
-            batch = await Batch.findOne({
-                students: studentId,
-                $or: [{ course: courseId }, { courses: courseId }],
-            }).lean();
-        }
 
         // Compute totals from course modules
         const totalSections = (course.modules || []).reduce(
@@ -362,6 +483,7 @@ export async function getCourseProgress(req, res) {
                 classTiming: batch.classTiming,
                 meetLink: batch.meetLink,
                 daysOfWeek: batch.daysOfWeek,
+                nextClassAt: resolveNextClassAt(batch),
             }
             : null;
 
@@ -419,5 +541,115 @@ export async function getCourseProgress(req, res) {
     } catch (error) {
         console.error("Get course progress error:", error);
         res.status(500).json({ message: "Failed to fetch course progress" });
+    }
+}
+
+const catalogSelect = "courseName courseId thumbnail courseDescription courseDuration courseDurationMonths modules.title modules.sections.sectionName instructor";
+
+/**
+ * @desc    Catalog of academy courses for the logged-in student
+ * @route   GET /api/student/catalog
+ * @access  Private (Student)
+ */
+export async function getStudentCatalog(req, res) {
+    try {
+        const [courses, user] = await Promise.all([
+            Course.find({})
+                .select(catalogSelect)
+                .populate("instructor", "name")
+                .sort({ courseName: 1 })
+                .lean(),
+            User.findById(req.user.id).select("enrolledCourses").lean(),
+        ]);
+
+        const batchIds = [...new Set(
+            (user?.enrolledCourses || []).map((entry) => entry.batch).filter(Boolean).map(String)
+        )];
+        const batches = batchIds.length
+            ? await Batch.find({ _id: { $in: batchIds } }).select("students course courses").lean()
+            : [];
+        const batchById = new Map(batches.map((batch) => [String(batch._id), batch]));
+        const enrolledIds = new Set(
+            (user?.enrolledCourses || [])
+                .filter((entry) => isProperlyEnrolled(
+                    req.user.id,
+                    entry.course,
+                    batchById.get(String(entry.batch))
+                ))
+                .map((entry) => String(entry.course))
+        );
+
+        res.json({
+            courses: courses.map((course) => summarizeCatalogCourse(course, enrolledIds)),
+        });
+    } catch (error) {
+        console.error("Get student catalog error:", error);
+        res.status(500).json({ message: "Failed to fetch course catalog" });
+    }
+}
+
+/**
+ * @desc    Public-safe outline for one catalog course
+ * @route   GET /api/student/catalog/:courseId
+ * @access  Private (Student)
+ */
+export async function getStudentCatalogCourse(req, res) {
+    try {
+        const { courseId } = req.params;
+        const course = await Course.findById(courseId)
+            .select(catalogSelect)
+            .populate("instructor", "name")
+            .lean();
+
+        if (!course) return res.status(404).json({ message: "Course not found" });
+
+        const user = await User.findById(req.user.id)
+            .select("enrolledCourses")
+            .lean();
+        const enrolledIds = new Set(
+            (user?.enrolledCourses || []).map((entry) => String(entry.course))
+        );
+        const summary = summarizeCatalogCourse(course, enrolledIds);
+
+        const enrollment = (user?.enrolledCourses || []).find(
+            (entry) => String(entry.course) === String(course._id)
+        ) || null;
+
+        let batch = null;
+        if (enrollment?.batch) {
+            batch = await Batch.findById(enrollment.batch)
+                .select("name students meetLink classTiming daysOfWeek status course courses")
+                .lean();
+        }
+        const properlyEnrolled = isProperlyEnrolled(req.user.id, course._id, batch);
+        if (!properlyEnrolled) batch = null;
+        summary.enrolled = properlyEnrolled;
+
+        const modules = (course.modules || []).map((module) => ({
+            title: module.title,
+            lessons: properlyEnrolled
+                ? (module.sections || []).map((section) => section.sectionName).filter(Boolean)
+                : [],
+        }));
+
+        res.json({
+            course: {
+                ...summary,
+                modules,
+                batchId: batch?._id || null,
+                batchName: batch?.name || null,
+                meetLink: batch?.meetLink || null,
+                classTiming: batch?.classTiming || null,
+                daysOfWeek: batch?.daysOfWeek || [],
+                nextClassAt: resolveNextClassAt(batch),
+                enrolledAt: enrollment?.enrolledAt || null,
+            },
+        });
+    } catch (error) {
+        console.error("Get catalog course error:", error);
+        if (error.kind === "ObjectId" || error.name === "CastError") {
+            return res.status(404).json({ message: "Course not found" });
+        }
+        res.status(500).json({ message: "Failed to fetch course" });
     }
 }

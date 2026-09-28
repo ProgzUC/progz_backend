@@ -1,0 +1,13 @@
+process.env.NODE_ENV = "test";
+process.env.JWT_SECRET = "test-jwt-secret";
+process.env.REFRESH_TOKEN_SECRET = "test-refresh-secret";
+process.env.ACCESS_TOKEN_EXPIRES = "15m";
+process.env.REFRESH_TOKEN_EXPIRES = "7d";
+process.env.SMTP_HOST = "";
+process.env.SMTP_USER = "";
+process.env.SMTP_PASS = "";
+process.env.BREVO_API_KEY = "";
+process.env.FROM_EMAIL = "";
+process.env.ADMIN_EMAIL = "";
+process.env.ZEN_API_BASE_URL = "";
+process.env.ZEN_API_KEY = "";

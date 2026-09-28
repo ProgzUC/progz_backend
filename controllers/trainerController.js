@@ -225,7 +225,7 @@ export const getTrainerCourses = async (req, res) => {
     const courses = await Course.find({
       instructor: trainerId,
     })
-      .select("courseName modules enrolledStudents thumbnail")
+      .select("courseName courseDescription modules enrolledStudents thumbnail")
       .lean();
 
     if (!courses.length) {
@@ -269,6 +269,7 @@ export const getTrainerCourses = async (req, res) => {
       return {
         courseId: c._id,
         courseName: c.courseName,
+        courseDescription: c.courseDescription || "",
         thumbnail: c.thumbnail,
         totalStudents: Math.max(batchStudentCount, staticEnrolledCount),
         totalSections: c.modules.reduce((acc, m) => acc + (m.sections?.length || 0), 0),

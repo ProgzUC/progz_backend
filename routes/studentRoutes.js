@@ -1,7 +1,7 @@
 import { Router } from "express";
 const router = Router();
 import { protect, authorizeRoles } from "../middlewares/authMiddleware.js";
-import { getStudentProfile, updateStudentProfile, changePassword, getStudentCourses, getCourseProgress } from "../controllers/studentController.js";
+import { getStudentProfile, updateStudentProfile, changePassword, getStudentCourses, getCourseProgress, getStudentCatalog, getStudentCatalogCourse } from "../controllers/studentController.js";
 import { listPortalAnnouncements } from "../controllers/announcementController.js";
 import { submissionRateLimit } from "../middlewares/rateLimit.js";
 import { validate, changePasswordSchema } from "../middlewares/validate.js";
@@ -77,6 +77,8 @@ router.post(
  *         description: List of enrolled courses
  */
 // Course routes
+router.get("/catalog", protect, authorizeRoles("student"), getStudentCatalog);
+router.get("/catalog/:courseId", protect, authorizeRoles("student"), getStudentCatalogCourse);
 router.get("/my-courses", protect, authorizeRoles("student"), getStudentCourses);
 
 /**

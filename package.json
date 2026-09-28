@@ -15,7 +15,10 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test --test-timeout 180000 \"tests/**/*.test.js\"",
+    "test:unit": "node --test --test-timeout 30000 \"tests/unit/**/*.test.js\"",
+    "test:api": "node --test --test-timeout 180000 \"tests/api/**/*.test.js\"",
+    "test:e2e": "node --test --test-timeout 180000 \"tests/e2e/**/*.test.js\"",
     "dev": "nodemon server.js",
     "start": "node server.js",
     "seed:student": "node scripts/seedDemoStudent.js",
@@ -23,7 +26,10 @@
     "seed:demo": "node scripts/seedDemoUsers.js"
   },
   "devDependencies": {
-    "nodemon": "^3.1.11"
+    "mongodb-memory-server": "^11.3.0",
+    "nock": "^14.0.17",
+    "nodemon": "^3.1.11",
+    "supertest": "^7.3.0"
   },
   "dependencies": {
     "@sendinblue/client": "^3.3.1",

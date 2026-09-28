@@ -179,17 +179,11 @@ export async function joinClass(req, res) {
                 await session.save();
             }
 
-            const populated = await populateSession(session._id);
-            const myEntry = populated.attendance.find(
-                (a) => String(a.student._id || a.student) === String(userId)
-            );
-
             return res.json({
                 meetLink: batch.meetLink,
                 role: "student",
-                joinedAt: myEntry?.joinedAt || entry.joinedAt,
-                status: myEntry?.status || entry.status,
-                session: populated,
+                joinedAt: entry.joinedAt,
+                status: entry.status,
             });
         }
 
@@ -423,8 +417,9 @@ export async function getStudentAttendance(req, res) {
                 attendanceHistory.push({
                     sessionId: session._id,
                     date: session.date,
-                    batchName: session.batch.name,
-                    trainerName: session.trainer.name,
+                    batchId: session.batch?._id || null,
+                    batchName: session.batch?.name || "Batch",
+                    trainerName: session.trainer?.name || "Trainer",
                     status: studentAttendance.status,
                     joinedAt: studentAttendance.joinedAt || null,
                     duration,

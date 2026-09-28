@@ -18,6 +18,10 @@ const getRetryAfterSeconds = (until) => {
 };
 
 export const loginRateLimit = (req, res, next) => {
+  if (process.env.NODE_ENV === "test") {
+    res.locals.loginRateLimitKey = getClientKey(req);
+    return next();
+  }
   const key = getClientKey(req);
   const now = Date.now();
   const record = attempts.get(key);
