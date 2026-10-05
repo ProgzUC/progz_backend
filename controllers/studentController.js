@@ -66,7 +66,7 @@ function summarizeCatalogCourse(course, enrolledIds) {
     const modules = course.modules || [];
     const lessonCount = modules.reduce((acc, module) => acc + (module.sections?.length || 0), 0);
     const instructors = (course.instructor || [])
-        .map((person) => (typeof person === "object" ? person.name : null))
+        .map((person) => (person && typeof person === "object" ? person.name : null))
         .filter(Boolean);
 
     return {
