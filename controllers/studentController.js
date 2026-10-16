@@ -437,19 +437,22 @@ export async function getStudentBatches(req, res) {
         const enrollmentBatchIds = [
             ...new Set(
                 (user.enrolledCourses || [])
-                    .map((ec) => String(ec?.batch || ""))
-                    .filter(Boolean)
+                    .map((ec) => String(ec?.batch?._id || ec?.batch || ""))
+                    .filter((id) => id && /^[a-f\d]{24}$/i.test(id))
             ),
         ];
 
-        const batches = await Batch.find({
-            $or: [
-                { students: studentId },
-                ...(enrollmentBatchIds.length
-                    ? [{ _id: { $in: enrollmentBatchIds } }]
-                    : []),
-            ],
-        })
+        const batchQuery =
+            enrollmentBatchIds.length > 0
+                ? {
+                      $or: [
+                          { students: studentId },
+                          { _id: { $in: enrollmentBatchIds } },
+                      ],
+                  }
+                : { students: studentId };
+
+        const batches = await Batch.find(batchQuery)
             .populate("course", "courseName")
             .populate("courses", "courseName")
             .lean();

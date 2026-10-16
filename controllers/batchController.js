@@ -536,15 +536,16 @@ export const updateBatch = async (req, res) => {
     }
 
     // Sync students to all courses if changed
-    if (updates.students) {
+    if (Array.isArray(updates.students)) {
       const courseIds = getBatchCourseIds(batch);
       for (const sId of updates.students) {
         const student = await User.findById(sId);
         if (!student) continue;
         await enrollStudentIntoCourses(student, batch._id, courseIds);
       }
-      const addedStudents = updates.students.map(String).filter((id) => !previousStudentIds.includes(id));
-      const removedStudents = previousStudentIds.filter((id) => !updates.students.map(String).includes(id));
+      const nextStudentIds = updates.students.map(String);
+      const addedStudents = nextStudentIds.filter((id) => !previousStudentIds.includes(id));
+      const removedStudents = previousStudentIds.filter((id) => !nextStudentIds.includes(id));
       if (addedStudents.length) {
         await notifyBatchAssigned({ users: addedStudents, batch, assignedAs: "student" });
       }
