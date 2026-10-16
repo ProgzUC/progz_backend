@@ -69,7 +69,7 @@ export const sanitizePrefsPatch = (body = {}) => {
 };
 
 const portalBase = () =>
-  String(process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
+  String(process.env.FRONTEND_URL || "https://progz.urbancode.in").replace(/\/$/, "");
 
 const academyName = () =>
   String(process.env.SMTP_FROM_NAME || "ProgZ Academy").trim() || "ProgZ Academy";
@@ -95,11 +95,20 @@ const absoluteLink = (link) => {
   return `${portalBase()}${link.startsWith("/") ? link : `/${link}`}`;
 };
 
-const buildMail = ({ name, title, body, link, type }) => {
+const ctaLabelForLink = (link = "") => {
+  const path = String(link || "").toLowerCase();
+  if (path.includes("trainer-dashboard")) return "Open Trainer Dashboard";
+  if (path.includes("student-dashboard")) return "Open Student Dashboard";
+  if (path.includes("/admin")) return "Open Admin Dashboard";
+  return "Open Portal";
+};
+
+const buildMail = ({ name, title, body, link, type, ctaLabel }) => {
   const academy = academyName();
   const greeting = name ? `Hi ${name},` : "Hi,";
+  const buttonLabel = ctaLabel || ctaLabelForLink(link);
   const cta = link
-    ? `<p style="margin:24px 0 0;"><a href="${escapeHtml(absoluteLink(link))}" style="display:inline-block;padding:10px 16px;background:#064E3B;color:#ffffff;text-decoration:none;border-radius:8px;font-family:Arial,sans-serif;font-size:14px;">Open portal</a></p>`
+    ? `<p style="margin:24px 0 0;"><a href="${escapeHtml(absoluteLink(link))}" style="display:inline-block;padding:10px 16px;background:#064E3B;color:#ffffff;text-decoration:none;border-radius:8px;font-family:Arial,sans-serif;font-size:14px;">${escapeHtml(buttonLabel)}</a></p>`
     : "";
   const textCta = link ? `\n\nOpen: ${absoluteLink(link)}` : "";
 
@@ -132,14 +141,14 @@ const loadUsers = async (userIds = []) => {
     .lean();
 };
 
-const sendOneEmail = async ({ email, name, title, body, link, type }) => {
+const sendOneEmail = async ({ email, name, title, body, link, type, ctaLabel }) => {
   if (!EMAIL_RE.test(String(email || "").trim().toLowerCase())) {
     throw new Error("Invalid recipient email");
   }
   if (!process.env.SMTP_HOST?.trim() || !process.env.SMTP_USER?.trim() || !process.env.SMTP_PASS?.trim()) {
     throw new Error("SMTP is not configured");
   }
-  const mail = buildMail({ name, title, body, link, type });
+  const mail = buildMail({ name, title, body, link, type, ctaLabel });
   await sendEmail({
     email: String(email).trim().toLowerCase(),
     subject: mail.subject,
@@ -159,6 +168,7 @@ export async function dispatch({
   title,
   body = "",
   link = "",
+  ctaLabel = "",
   metadata = {},
   channels = ["in_app", "email"],
   dedupKey = null,
@@ -203,6 +213,7 @@ export async function dispatch({
           body,
           link,
           type,
+          ctaLabel,
         });
         emailStatus = "sent";
       } catch (err) {
@@ -349,14 +360,17 @@ export function notifyBatchAssigned({ users = [], batch, assignedAs = "student" 
     : "";
   const schedule = [days, timing].filter(Boolean).join(" · ");
   const meet = batch.meetLink ? ` Class link: ${batch.meetLink}` : "";
-  const roleLabel = assignedAs === "trainer" ? "trainer" : "student";
+  const isTrainer = assignedAs === "trainer";
+  const roleLabel = isTrainer ? "trainer" : "student";
+  const homeLink = isTrainer ? "/trainer-dashboard/" : "/student-dashboard/";
 
   notifyQuiet({
     userIds: list.map((u) => u._id || u),
     type: NOTIFICATION_TYPES.BATCH_ASSIGNMENT,
     title: `You were added to ${batch.name}`,
     body: `You are assigned as a ${roleLabel} in batch "${batch.name}".${schedule ? ` Schedule: ${schedule}.` : ""}${meet}`,
-    link: assignedAs === "trainer" ? "/trainer-dashboard" : "/student-dashboard/my-courses",
+    link: homeLink,
+    ctaLabel: isTrainer ? "Open Trainer Dashboard" : "Open Student Dashboard",
     metadata: {
       batchId: String(batch._id),
       batchName: batch.name,
