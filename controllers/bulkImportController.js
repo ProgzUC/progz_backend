@@ -217,7 +217,7 @@ export const bulkImportStudents = async (req, res) => {
 
     if (newlyAssignedUsers.length > 0) {
       await batch.save();
-      notifyBatchAssigned({
+      await notifyBatchAssigned({
         users: newlyAssignedUsers,
         batch,
         assignedAs: "student",

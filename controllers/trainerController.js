@@ -59,7 +59,8 @@ export const trainerBootstrap = async (req, res) => {
           ? 0
           : Math.round((completedSections / totalSections) * 100);
 
-      if (batch.status === "active") {
+      // Show assigned work that is running or about to start (create often saved as upcoming)
+      if (batch.status === "active" || batch.status === "upcoming") {
         // compose human-friendly timing string from classTiming object
         const timingStr = batch.classTiming
           ? `${batch.classTiming.startTime} - ${batch.classTiming.endTime} ${batch.classTiming.timezone || ""}`.trim()

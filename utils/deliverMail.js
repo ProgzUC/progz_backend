@@ -39,5 +39,23 @@ export async function deliverMail({
   return { provider: "smtp" };
 }
 
-export const frontendBaseUrl = () =>
-  (process.env.FRONTEND_URL || "https://progz.urbancode.in").replace(/\/$/, "");
+/**
+ * Base URL used in outbound email / magic links.
+ * Prefer EMAIL_FRONTEND_URL so local FRONTEND_URL=localhost does not leak into live mail.
+ */
+export const frontendBaseUrl = () => {
+  const explicit = String(
+    process.env.EMAIL_FRONTEND_URL || process.env.PUBLIC_FRONTEND_URL || ""
+  ).trim();
+  if (explicit) return explicit.replace(/\/$/, "");
+
+  const raw = String(process.env.FRONTEND_URL || "https://progz.urbancode.in")
+    .trim()
+    .replace(/\/$/, "");
+
+  // Shared/live DB + local FRONTEND_URL would otherwise mail localhost CTAs.
+  if (/localhost|127\.0\.0\.1/i.test(raw)) {
+    return "https://progz.urbancode.in";
+  }
+  return raw || "https://progz.urbancode.in";
+};

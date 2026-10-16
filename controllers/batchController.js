@@ -136,7 +136,8 @@ export const createBatch = async (req, res) => {
       startDate,
       endDate,
       daysOfWeek,
-      status, // schema will validate enum & default
+      // Default active so trainer Active Batches shows it immediately (schema default is upcoming)
+      status: status || "active",
       sectionProgress,
     });
 
@@ -147,11 +148,11 @@ export const createBatch = async (req, res) => {
         if (!student) continue;
         await enrollStudentIntoCourses(student, batch._id, courseIds);
       }
-      notifyBatchAssigned({ users: students, batch, assignedAs: "student" });
+      await notifyBatchAssigned({ users: students, batch, assignedAs: "student" });
     }
 
     if (trainers.length) {
-      notifyBatchAssigned({
+      await notifyBatchAssigned({
         users: trainers.map((t) => t.trainer),
         batch,
         assignedAs: "trainer",
@@ -239,7 +240,7 @@ export const enrollStudent = async (req, res) => {
         if (!alreadyInBatch) {
             batch.students.push(studentId);
             await batch.save();
-            notifyBatchAssigned({ users: [student], batch, assignedAs: "student" });
+            await notifyBatchAssigned({ users: [student], batch, assignedAs: "student" });
         }
 
         const courseIds = getBatchCourseIds(batch);
@@ -350,7 +351,7 @@ export const manageTrainers = async (req, res) => {
         const nextTrainerIds = trainers.map((t) => String(t.trainer));
         const addedTrainers = nextTrainerIds.filter((id) => !previousTrainerIds.includes(id));
         if (addedTrainers.length) {
-            notifyBatchAssigned({ users: addedTrainers, batch, assignedAs: "trainer" });
+            await notifyBatchAssigned({ users: addedTrainers, batch, assignedAs: "trainer" });
         }
 
         res.json({ msg: "Trainers updated successfully", batch });
@@ -545,7 +546,7 @@ export const updateBatch = async (req, res) => {
       const addedStudents = updates.students.map(String).filter((id) => !previousStudentIds.includes(id));
       const removedStudents = previousStudentIds.filter((id) => !updates.students.map(String).includes(id));
       if (addedStudents.length) {
-        notifyBatchAssigned({ users: addedStudents, batch, assignedAs: "student" });
+        await notifyBatchAssigned({ users: addedStudents, batch, assignedAs: "student" });
       }
       if (removedStudents.length) {
         notifyBatchRemoved({ users: removedStudents, batch });
@@ -556,7 +557,7 @@ export const updateBatch = async (req, res) => {
       const nextTrainerIds = (batch.trainers || []).map((t) => String(t.trainer));
       const addedTrainers = nextTrainerIds.filter((id) => !previousTrainerIds.includes(id));
       if (addedTrainers.length) {
-        notifyBatchAssigned({ users: addedTrainers, batch, assignedAs: "trainer" });
+        await notifyBatchAssigned({ users: addedTrainers, batch, assignedAs: "trainer" });
       }
     }
 
@@ -710,7 +711,7 @@ export const bulkEnrollStudents = async (req, res) => {
 
         if (enrolledCount > 0) {
             await batch.save();
-            notifyBatchAssigned({ users: newlyEnrolled, batch, assignedAs: "student" });
+            await notifyBatchAssigned({ users: newlyEnrolled, batch, assignedAs: "student" });
         }
 
         for (const user of approvedUsers) {

@@ -419,6 +419,133 @@ export async function getStudentCourses(req, res) {
     }
 }
 
+/**
+ * @desc    Batches assigned to the logged-in student (separate from course list)
+ * @route   GET /api/student/my-batches
+ * @access  Private (Student)
+ */
+export async function getStudentBatches(req, res) {
+    try {
+        const studentId = req.user.id;
+
+        const user = await User.findById(studentId)
+            .select("enrolledCourses")
+            .populate({ path: "enrolledCourses.course", select: "courseName modules" })
+            .lean();
+        if (!user) return res.status(404).json({ message: "User not found" });
+
+        const enrollmentBatchIds = [
+            ...new Set(
+                (user.enrolledCourses || [])
+                    .map((ec) => String(ec?.batch || ""))
+                    .filter(Boolean)
+            ),
+        ];
+
+        const batches = await Batch.find({
+            $or: [
+                { students: studentId },
+                ...(enrollmentBatchIds.length
+                    ? [{ _id: { $in: enrollmentBatchIds } }]
+                    : []),
+            ],
+        })
+            .populate("course", "courseName")
+            .populate("courses", "courseName")
+            .lean();
+
+        const byId = new Map(batches.map((b) => [String(b._id), b]));
+        const progressByBatch = new Map();
+
+        for (const ec of user.enrolledCourses || []) {
+            const bid = String(ec?.batch || "");
+            const batch = byId.get(bid);
+            const courseDoc = ec.course;
+            if (!bid || !batch || !courseDoc?._id) continue;
+            if (!isProperlyEnrolled(studentId, courseDoc._id, batch)) continue;
+
+            const totalSections =
+                courseDoc.modules?.reduce((acc, m) => acc + (m.sections?.length || 0), 0) || 0;
+            const primaryCourseId = batch.course?._id || batch.course;
+            const completedList = Array.isArray(batch.sectionProgress)
+                ? filterCompletedForCourse(batch.sectionProgress, courseDoc._id, primaryCourseId)
+                : [];
+
+            if (!progressByBatch.has(bid)) {
+                progressByBatch.set(bid, { completed: 0, total: 0, courses: [] });
+            }
+            const bucket = progressByBatch.get(bid);
+            bucket.total += totalSections;
+            bucket.completed += completedList.length;
+            bucket.courses.push({
+                courseId: courseDoc._id,
+                courseName: courseDoc.courseName,
+                progressPercentage:
+                    totalSections > 0
+                        ? Math.round((completedList.length / totalSections) * 100)
+                        : 0,
+            });
+        }
+
+        const mapped = [...byId.values()].map((batch) => {
+            const bid = String(batch._id);
+            const progress = progressByBatch.get(bid) || { completed: 0, total: 0, courses: [] };
+            const courseNameList = [
+                batch.course?.courseName,
+                ...(batch.courses || [])
+                    .map((c) => c?.courseName)
+                    .filter((n) => n && n !== batch.course?.courseName),
+            ].filter(Boolean);
+
+            const timingStr = batch.classTiming
+                ? `${batch.classTiming.startTime || ""} - ${batch.classTiming.endTime || ""} ${batch.classTiming.timezone || ""}`.trim()
+                : null;
+
+            return {
+                batchId: batch._id,
+                batchName: batch.name,
+                status: batch.status,
+                startDate: batch.startDate || null,
+                endDate: batch.endDate || null,
+                timing: timingStr,
+                classTiming: batch.classTiming || null,
+                daysOfWeek: batch.daysOfWeek || [],
+                meetLink: batch.meetLink || null,
+                courseNames: courseNameList,
+                courses: progress.courses?.length
+                    ? progress.courses
+                    : courseNameList.map((name, i) => ({
+                          courseId: batch.courses?.[i]?._id || batch.course?._id || null,
+                          courseName: name,
+                          progressPercentage: 0,
+                      })),
+                completionPercentage:
+                    progress.total > 0
+                        ? Math.round((progress.completed / progress.total) * 100)
+                        : 0,
+                nextClassAt: resolveNextClassAt(batch),
+            };
+        });
+
+        const activeBatches = mapped.filter(
+            (b) => b.status === "active" || b.status === "upcoming"
+        );
+        const completedBatches = mapped.filter((b) => b.status === "completed");
+
+        res.json({
+            activeBatches,
+            completedBatches,
+            stats: {
+                activeBatches: activeBatches.length,
+                completedBatches: completedBatches.length,
+            },
+        });
+    } catch (error) {
+        console.error("Get student batches error:", error);
+        res.status(500).json({ message: "Failed to fetch batches" });
+    }
+}
+
 
 /**
  * @desc    Get detailed progress for a specific course

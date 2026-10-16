@@ -1,6 +1,6 @@
 import User from "../models/User.js";
 import Notification from "../models/Notification.js";
-import sendEmail from "../utils/sendEmail.js";
+import { deliverMail, frontendBaseUrl } from "../utils/deliverMail.js";
 import logger from "../utils/logger.js";
 
 export const NOTIFICATION_TYPES = {
@@ -68,8 +68,7 @@ export const sanitizePrefsPatch = (body = {}) => {
   return next;
 };
 
-const portalBase = () =>
-  String(process.env.FRONTEND_URL || "https://progz.urbancode.in").replace(/\/$/, "");
+const portalBase = () => frontendBaseUrl();
 
 const academyName = () =>
   String(process.env.SMTP_FROM_NAME || "ProgZ Academy").trim() || "ProgZ Academy";
@@ -145,15 +144,24 @@ const sendOneEmail = async ({ email, name, title, body, link, type, ctaLabel }) 
   if (!EMAIL_RE.test(String(email || "").trim().toLowerCase())) {
     throw new Error("Invalid recipient email");
   }
-  if (!process.env.SMTP_HOST?.trim() || !process.env.SMTP_USER?.trim() || !process.env.SMTP_PASS?.trim()) {
-    throw new Error("SMTP is not configured");
+  const hasBrevo = Boolean(
+    process.env.BREVO_API_KEY?.trim() && process.env.FROM_EMAIL?.trim()
+  );
+  const hasSmtp = Boolean(
+    process.env.SMTP_HOST?.trim() &&
+      process.env.SMTP_USER?.trim() &&
+      process.env.SMTP_PASS?.trim()
+  );
+  if (!hasBrevo && !hasSmtp) {
+    throw new Error("Email is not configured (set SMTP_* or BREVO_API_KEY + FROM_EMAIL)");
   }
   const mail = buildMail({ name, title, body, link, type, ctaLabel });
-  await sendEmail({
+  await deliverMail({
     email: String(email).trim().toLowerCase(),
     subject: mail.subject,
-    message: mail.message,
+    text: mail.message,
     html: mail.html,
+    senderName: academyName(),
   });
 };
 
@@ -348,9 +356,9 @@ export function notifyRegistrationPending(pendingUser) {
   });
 }
 
-export function notifyBatchAssigned({ users = [], batch, assignedAs = "student" }) {
+export async function notifyBatchAssigned({ users = [], batch, assignedAs = "student" }) {
   const list = (users || []).filter(Boolean);
-  if (!list.length || !batch) return;
+  if (!list.length || !batch) return { created: 0, recipients: 0 };
 
   const timing = batch.classTiming
     ? `${batch.classTiming.startTime || ""}–${batch.classTiming.endTime || ""}`.replace(/^–|–$/g, "")
@@ -364,19 +372,35 @@ export function notifyBatchAssigned({ users = [], batch, assignedAs = "student" 
   const roleLabel = isTrainer ? "trainer" : "student";
   const homeLink = isTrainer ? "/trainer-dashboard/" : "/student-dashboard/";
 
-  notifyQuiet({
-    userIds: list.map((u) => u._id || u),
-    type: NOTIFICATION_TYPES.BATCH_ASSIGNMENT,
-    title: `You were added to ${batch.name}`,
-    body: `You are assigned as a ${roleLabel} in batch "${batch.name}".${schedule ? ` Schedule: ${schedule}.` : ""}${meet}`,
-    link: homeLink,
-    ctaLabel: isTrainer ? "Open Trainer Dashboard" : "Open Student Dashboard",
-    metadata: {
+  try {
+    const result = await dispatch({
+      userIds: list.map((u) => u._id || u),
+      type: NOTIFICATION_TYPES.BATCH_ASSIGNMENT,
+      title: `You were added to ${batch.name}`,
+      body: `You are assigned as a ${roleLabel} in batch "${batch.name}".${schedule ? ` Schedule: ${schedule}.` : ""}${meet}`,
+      link: homeLink,
+      ctaLabel: isTrainer ? "Open Trainer Dashboard" : "Open Student Dashboard",
+      metadata: {
+        batchId: String(batch._id),
+        batchName: batch.name,
+        assignedAs,
+      },
+    });
+    logger.info("Batch assignment notifications dispatched", {
       batchId: String(batch._id),
       batchName: batch.name,
       assignedAs,
-    },
-  });
+      ...result,
+    });
+    return result;
+  } catch (err) {
+    logger.error("Batch assignment notification failed", {
+      batchId: String(batch._id),
+      assignedAs,
+      error: err.message,
+    });
+    return { created: 0, recipients: 0, error: err.message };
+  }
 }
 
 export function notifyBatchRemoved({ users = [], batch }) {

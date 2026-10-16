@@ -18,7 +18,8 @@ const getRetryAfterSeconds = (until) => {
 };
 
 export const loginRateLimit = (req, res, next) => {
-  if (process.env.NODE_ENV === "test") {
+  // Skip lockout in local/dev so testing is not blocked after failed attempts.
+  if (process.env.NODE_ENV === "test" || process.env.NODE_ENV === "development") {
     res.locals.loginRateLimitKey = getClientKey(req);
     return next();
   }
@@ -72,4 +73,4 @@ export const recordLoginFailure = (key) => {
 export const clearLoginFailures = (key) => {
   if (!key) return;
   attempts.delete(key);
-};
+};  

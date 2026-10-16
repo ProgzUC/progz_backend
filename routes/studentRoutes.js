@@ -1,7 +1,16 @@
 import { Router } from "express";
 const router = Router();
 import { protect, authorizeRoles } from "../middlewares/authMiddleware.js";
-import { getStudentProfile, updateStudentProfile, changePassword, getStudentCourses, getCourseProgress, getStudentCatalog, getStudentCatalogCourse } from "../controllers/studentController.js";
+import {
+  getStudentProfile,
+  updateStudentProfile,
+  changePassword,
+  getStudentCourses,
+  getStudentBatches,
+  getCourseProgress,
+  getStudentCatalog,
+  getStudentCatalogCourse,
+} from "../controllers/studentController.js";
 import { listPortalAnnouncements } from "../controllers/announcementController.js";
 import { submissionRateLimit } from "../middlewares/rateLimit.js";
 import { validate, changePasswordSchema } from "../middlewares/validate.js";
@@ -80,6 +89,7 @@ router.post(
 router.get("/catalog", protect, authorizeRoles("student"), getStudentCatalog);
 router.get("/catalog/:courseId", protect, authorizeRoles("student"), getStudentCatalogCourse);
 router.get("/my-courses", protect, authorizeRoles("student"), getStudentCourses);
+router.get("/my-batches", protect, authorizeRoles("student"), getStudentBatches);
 
 /**
  * @swagger
