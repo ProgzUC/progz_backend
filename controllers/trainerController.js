@@ -32,21 +32,28 @@ export const trainerBootstrap = async (req, res) => {
     batches.forEach(batch => {
       totalStudents += batch.students?.length || 0;
 
-      const course = batch.course;
-      if (!course || !course.modules) {
+      // Prefer primary course; fall back to first entry in courses[] for multi-course batches
+      const course =
+        batch.course && (batch.course.modules || batch.course.courseName)
+          ? batch.course
+          : (batch.courses || []).find((c) => c && (c.modules || c.courseName)) ||
+            null;
+      if (!course) {
         console.warn("Course not populated for batch:", batch._id);
         return;
       }
 
+      const modules = course.modules || [];
+      const primaryName = course.courseName;
       const courseNameList = [
-        course.courseName,
+        primaryName,
         ...(batch.courses || [])
           .map((c) => c?.courseName)
-          .filter((n) => n && n !== course.courseName),
-      ];
-      const courseNamesLabel = courseNameList.join(", ");
+          .filter((n) => n && n !== primaryName),
+      ].filter(Boolean);
+      const courseNamesLabel = courseNameList.join(", ") || "Untitled course";
 
-      const totalSections = course.modules.reduce(
+      const totalSections = modules.reduce(
         (acc, m) => acc + (m.sections?.length || 0),
         0
       );
@@ -158,7 +165,7 @@ export const getTrainerBatchDetails = async (req, res) => {
     })
       .populate("course", "courseName modules")
       .populate("courses", "courseName modules")
-      .populate("students", "name email")
+      .populate("students", "name email phone education")
       .lean();
 
     if (!batch) {
