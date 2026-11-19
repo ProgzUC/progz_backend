@@ -235,7 +235,8 @@ export async function dispatch({
       }
     }
 
-    if (inApp || email) {
+    // Only persist rows that should appear in the in-app bell
+    if (inApp) {
       try {
         const doc = await Notification.create({
           user: user._id,
@@ -245,7 +246,7 @@ export async function dispatch({
           link,
           metadata,
           channels: [
-            ...(inApp ? ["in_app"] : []),
+            "in_app",
             ...(email ? ["email"] : []),
           ],
           emailStatus,
@@ -450,8 +451,8 @@ export function notifySyncFailed(syncLog) {
   notifyAdminsQuiet({
     type: NOTIFICATION_TYPES.ADMIN_EVENT,
     title: "Zen sync failed",
-    body: `A ${syncLog?.triggerType || "scheduled"} Zen CRM sync did not finish cleanly. Check Monitoring for details.`,
-    link: "/admin/monitoring",
+    body: `A ${syncLog?.triggerType || "scheduled"} Zen CRM sync did not finish cleanly. Check Sync from Zen for details.`,
+    link: "/admin/sync",
     metadata: { syncLogId: String(syncLog?._id || "") },
     channels: ["in_app"],
   });

@@ -7,16 +7,71 @@ import {
   serializeNotification,
 } from "../services/notificationService.js";
 
+/** Admin: only action-needed / critical alerts. */
+const adminImportantFilter = () => ({
+  $or: [
+    { type: "pending_approval" },
+    { type: "admin_event", "metadata.syncLogId": { $exists: true, $nin: [null, ""] } },
+    { title: /^Zen sync failed$/i },
+  ],
+});
+
+/**
+ * Student / trainer: keep personal action alerts; drop noisy reminders
+ * and repeated attendance/digest notices from the in-app bell.
+ */
+const learnerImportantFilter = () => ({
+  $and: [
+    { type: { $ne: "class_reminder" } },
+    {
+      $or: [
+        {
+          type: {
+            $in: ["approval", "rejection", "batch_assignment", "attendance_warning"],
+          },
+        },
+        {
+          type: "admin_event",
+          title: {
+            $not:
+              /weekly academy digest|students below attendance threshold|^Attendance alert in /i,
+          },
+        },
+      ],
+    },
+  ],
+});
+
+const importantFilterForRole = (role) => {
+  const normalized = String(role || "").toLowerCase();
+  if (normalized === "admin") return adminImportantFilter();
+  if (normalized === "student" || normalized === "trainer" || normalized === "instructor") {
+    return learnerImportantFilter();
+  }
+  return null;
+};
+
+const baseNotificationQuery = (req, { unreadOnly = false } = {}) => {
+  const query = {
+    user: req.user.id,
+    channels: "in_app",
+  };
+  if (unreadOnly) query.readAt = null;
+  const important = importantFilterForRole(req.user.role);
+  if (important) return { $and: [query, important] };
+  return query;
+};
+
 export const listMyNotifications = async (req, res) => {
   try {
     const limit = Math.min(Math.max(Number(req.query.limit) || 30, 1), 100);
     const unreadOnly = String(req.query.unread || "") === "true";
-    const query = { user: req.user.id };
-    if (unreadOnly) query.readAt = null;
+    const query = baseNotificationQuery(req, { unreadOnly });
+    const unreadQuery = baseNotificationQuery(req, { unreadOnly: true });
 
     const [items, unreadCount] = await Promise.all([
       Notification.find(query).sort({ createdAt: -1 }).limit(limit).lean(),
-      Notification.countDocuments({ user: req.user.id, readAt: null }),
+      Notification.countDocuments(unreadQuery),
     ]);
 
     return res.json({
@@ -31,10 +86,9 @@ export const listMyNotifications = async (req, res) => {
 
 export const getUnreadCount = async (req, res) => {
   try {
-    const unreadCount = await Notification.countDocuments({
-      user: req.user.id,
-      readAt: null,
-    });
+    const unreadCount = await Notification.countDocuments(
+      baseNotificationQuery(req, { unreadOnly: true })
+    );
     return res.json({ unreadCount });
   } catch (err) {
     console.error("getUnreadCount error", err);
@@ -65,7 +119,7 @@ export const markNotificationRead = async (req, res) => {
 export const markAllNotificationsRead = async (req, res) => {
   try {
     const result = await Notification.updateMany(
-      { user: req.user.id, readAt: null },
+      baseNotificationQuery(req, { unreadOnly: true }),
       { $set: { readAt: new Date() } }
     );
     return res.json({

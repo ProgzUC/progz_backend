@@ -367,7 +367,7 @@ const sendSyncFailureEmail = async (syncLog) => {
             <div style="background-color: #fef2f2; border: 1px solid #fee2e2; border-radius: 4px; padding: 12px; font-family: monospace; font-size: 13px; color: #991b1b; max-height: 200px; overflow-y: auto;">
                 ${syncLog.errorsList.map(err => `<div style="margin-bottom: 6px;">• ${err}</div>`).join("")}
             </div>
-            <p style="margin-top: 20px; font-size: 13px; color: #666;">Please check the Diagnostics & Monitoring dashboard in the Progz admin portal for full details.</p>
+            <p style="margin-top: 20px; font-size: 13px; color: #666;">Please check Sync from Zen in the Progz admin portal for full details.</p>
         </div>
     `;
 

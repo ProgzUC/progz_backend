@@ -7,7 +7,6 @@ import {
   NOTIFICATION_TYPES,
   dispatch,
   notifyAdminsQuiet,
-  notifyQuiet,
 } from "../services/notificationService.js";
 
 const ATTENDANCE_THRESHOLD = Number(process.env.ATTENDANCE_WARNING_THRESHOLD || 75);
@@ -97,6 +96,7 @@ export const runClassReminders = async () => {
     const timing = `${batch.classTiming.startTime}${batch.classTiming.endTime ? `–${batch.classTiming.endTime}` : ""}`;
     const meet = batch.meetLink ? ` Join: ${batch.meetLink}` : "";
 
+    // Email-only — keep the bell for important alerts only
     await dispatch({
       userIds,
       type: NOTIFICATION_TYPES.CLASS_REMINDER,
@@ -108,6 +108,7 @@ export const runClassReminders = async () => {
         startTime: batch.classTiming.startTime,
         dateKey,
       },
+      channels: ["email"],
       dedupKey: `class_reminder:${batch._id}:${dateKey}`,
     });
     sent += 1;
@@ -189,44 +190,10 @@ export const runAttendanceWarnings = async () => {
   const students = await User.find({ role: "student" }).select("_id").lean();
   const result = await warnAtRiskStudents(students.map((s) => s._id));
 
-  const byBatch = new Map();
-  for (const row of result.atRisk || []) {
-    if (!row.batchId) continue;
-    if (!byBatch.has(row.batchId)) {
-      byBatch.set(row.batchId, { name: row.batchName, count: 0 });
-    }
-    byBatch.get(row.batchId).count += 1;
-  }
-
-  const dayKey = zonedParts(new Date(), "Asia/Kolkata");
-  const dateKey = `${dayKey.year}-${dayKey.month}-${dayKey.day}`;
-
-  for (const [batchId, info] of byBatch.entries()) {
-    const batch = await Batch.findById(batchId).select("trainers name").lean();
-    const trainerIds = (batch?.trainers || [])
-      .map((t) => t.trainer)
-      .filter(Boolean);
-    notifyQuiet({
-      userIds: trainerIds,
-      type: NOTIFICATION_TYPES.ADMIN_EVENT,
-      title: `Attendance alert in ${info.name}`,
-      body: `${info.count} student${info.count === 1 ? " is" : "s are"} below ${ATTENDANCE_THRESHOLD}% attendance.`,
-      link: "/trainer-dashboard",
-      metadata: { batchId, count: info.count },
-      channels: ["in_app"],
-      dedupKey: `attendance_batch:${batchId}:${dateKey}`,
-    });
-  }
+  // Intentionally no daily trainer/admin in-app repeats for the same batch.
+  // At-risk students still get a personal weekly attendance_warning.
 
   if (result.warned) {
-    notifyAdminsQuiet({
-      type: NOTIFICATION_TYPES.ADMIN_EVENT,
-      title: "Students below attendance threshold",
-      body: `${result.warned} student${result.warned === 1 ? " is" : "s are"} under ${ATTENDANCE_THRESHOLD}% attendance this week.`,
-      link: "/admin/reports/attendance",
-      channels: ["in_app"],
-      dedupKey: `attendance_admin:${dateKey}`,
-    });
     logger.info(`Attendance warnings sent to ${result.warned} student(s)`);
   }
 
@@ -252,12 +219,14 @@ export const runWeeklyAdminDigest = async () => {
     daysOfWeek: todayName,
   });
 
+  // Email-only — do not create noisy in-app bell items for admins
   notifyAdminsQuiet({
     type: NOTIFICATION_TYPES.ADMIN_EVENT,
     title: "Weekly academy digest",
     body: `${pending} pending approval${pending === 1 ? "" : "s"}, ${atRiskCount} student${atRiskCount === 1 ? "" : "s"} below attendance, ${classesToday} class batch${classesToday === 1 ? "" : "es"} meet today.`,
     link: "/admin/overview",
     metadata: { pending, atRiskCount, classesToday },
+    channels: ["email"],
     dedupKey: `admin_digest:${parts.year}-${parts.month}-${parts.day}`,
     emailPrefKey: "emailDigest",
   });
